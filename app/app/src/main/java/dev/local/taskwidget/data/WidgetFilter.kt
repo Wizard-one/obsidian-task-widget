@@ -1,0 +1,82 @@
+package dev.local.taskwidget.data
+
+import org.json.JSONArray
+import org.json.JSONObject
+import java.time.LocalDate
+
+/**
+ * 单个 widget 实例的筛选配置(每个添加到主屏幕的 widget 各存一份)。
+ */
+data class WidgetFilter(
+    /** widget 头部显示的标题 */
+    val title: String = "任务",
+    /** 日期范围,见 SCOPE_* */
+    val dateScope: Int = SCOPE_ALL,
+    /** 是否显示没有截止日期的任务 */
+    val includeUndated: Boolean = true,
+    /** 标签筛选(不含 #),任务含其中任意一个即通过;空 = 不筛 */
+    val tags: List<String> = emptyList(),
+    /** 文件路径包含(不区分大小写),空 = 不筛。如 "工作/" 或 "Tasks.md" */
+    val pathContains: String = "",
+) {
+
+    fun apply(tasks: List<TaskItem>, today: LocalDate = LocalDate.now()): List<TaskItem> =
+        tasks.filter { task ->
+            val due = task.due
+            val dateOk = when {
+                due == null -> includeUndated
+                dateScope == SCOPE_TODAY -> !due.isAfter(today)
+                dateScope == SCOPE_WEEK -> !due.isAfter(today.plusDays(7))
+                else -> true
+            }
+            val tagOk = tags.isEmpty() || tags.any { it in task.tags }
+            val pathOk = pathContains.isBlank() ||
+                task.path.contains(pathContains.trim(), ignoreCase = true)
+            dateOk && tagOk && pathOk
+        }
+
+    fun toJson(): String = JSONObject()
+        .put("title", title)
+        .put("dateScope", dateScope)
+        .put("includeUndated", includeUndated)
+        .put("tags", JSONArray(tags))
+        .put("pathContains", pathContains)
+        .toString()
+
+    companion object {
+        /** 显示全部任务 */
+        const val SCOPE_ALL = 0
+
+        /** 今天到期 + 已过期 */
+        const val SCOPE_TODAY = 1
+
+        /** 7 天内到期 + 已过期 */
+        const val SCOPE_WEEK = 2
+
+        fun fromJson(json: String?): WidgetFilter {
+            if (json.isNullOrBlank()) return WidgetFilter()
+            return try {
+                val o = JSONObject(json)
+                val tags = mutableListOf<String>()
+                o.optJSONArray("tags")?.let { arr ->
+                    for (i in 0 until arr.length()) tags += arr.getString(i)
+                }
+                WidgetFilter(
+                    title = o.optString("title", "任务").ifBlank { "任务" },
+                    dateScope = o.optInt("dateScope", SCOPE_ALL),
+                    includeUndated = o.optBoolean("includeUndated", true),
+                    tags = tags,
+                    pathContains = o.optString("pathContains", ""),
+                )
+            } catch (_: Exception) {
+                WidgetFilter()
+            }
+        }
+
+        /** 把用户输入的标签串(逗号/空格分隔,可带 #)规范化为标签列表 */
+        fun parseTagsInput(input: String): List<String> =
+            input.split(',', ' ', ';', '，', '；')
+                .map { it.trim().removePrefix("#") }
+                .filter { it.isNotEmpty() }
+    }
+}
