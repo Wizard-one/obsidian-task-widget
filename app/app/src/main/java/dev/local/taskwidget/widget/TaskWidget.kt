@@ -113,6 +113,16 @@ private fun Header(title: String, count: Int, appWidgetId: Int) {
             style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 14.sp)
         )
         Spacer(GlanceModifier.defaultWeight())
+        val addIntent = Intent(context, dev.local.taskwidget.QuickAddActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        Image(
+            provider = ImageProvider(R.drawable.ic_add),
+            contentDescription = "快速添加",
+            modifier = GlanceModifier
+                .size(22.dp)
+                .clickable(actionStartActivityIntent(addIntent))
+        )
+        Spacer(GlanceModifier.width(10.dp))
         if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
             val configIntent = Intent(context, WidgetConfigActivity::class.java)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)

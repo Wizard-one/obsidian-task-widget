@@ -52,8 +52,14 @@ class TaskParserTest {
     fun `non task lines return null`() {
         assertNull(TaskParser.parseLine("普通文本"))
         assertNull(TaskParser.parseLine("- 无复选框列表项"))
-        assertNull(TaskParser.parseLine("- [-] 已取消任务"))
-        assertNull(TaskParser.parseLine("- [/] 进行中(非标准状态)"))
+    }
+
+    @Test
+    fun `status parsing`() {
+        assertEquals(TaskStatus.TODO, TaskParser.parseLine("- [ ] a")!!.status)
+        assertEquals(TaskStatus.DONE, TaskParser.parseLine("- [x] a")!!.status)
+        assertEquals(TaskStatus.CANCELLED, TaskParser.parseLine("- [-] a")!!.status)
+        assertEquals(TaskStatus.IN_PROGRESS, TaskParser.parseLine("- [/] a")!!.status)
     }
 
     @Test
@@ -158,7 +164,84 @@ class TaskParserTest {
 
     @Test
     fun `parse file returns only open tasks`() {
-        val tasks = TaskParser.parseFile("# 笔记\n- [ ] 甲\n- [x] 乙 ✅ 2026-07-01\n- [ ] 丙 📅 2026-07-12\n文字\n")
+        val tasks = TaskParser.parseFile("# 笔记\n- [ ] 甲\n- [x] 乙 ✅ 2026-07-01\n- [ ] 丙 📅 2026-07-12\n- [-] 丁\n文字\n")
         assertEquals(listOf("甲", "丙"), tasks.map { it.text })
+    }
+
+    // ---- 完整字段 / Dataview / 子任务 ----
+
+    @Test
+    fun `all emoji date fields parsed`() {
+        val t = TaskParser.parseLine(
+            "- [ ] 项目 🛫 2026-07-01 ⏳ 2026-07-05 📅 2026-07-10 ➕ 2026-06-30"
+        )!!
+        assertEquals(LocalDate.of(2026, 7, 1), t.startDate)
+        assertEquals(LocalDate.of(2026, 7, 5), t.scheduledDate)
+        assertEquals(LocalDate.of(2026, 7, 10), t.dueDate)
+        assertEquals(LocalDate.of(2026, 6, 30), t.createdDate)
+        assertEquals("项目", t.text)
+    }
+
+    @Test
+    fun `id and depends parsed`() {
+        val t = TaskParser.parseLine("- [ ] 部署 🆔 deploy1 ⛔ build1, test1")!!
+        assertEquals("deploy1", t.id)
+        assertEquals(listOf("build1", "test1"), t.dependsOn)
+        assertEquals("部署", t.text)
+    }
+
+    @Test
+    fun `dataview inline fields parsed`() {
+        val t = TaskParser.parseLine("- [ ] 报税 [due:: 2026-07-15] [priority:: high] [repeat:: every month]")!!
+        assertEquals(LocalDate.of(2026, 7, 15), t.dueDate)
+        assertEquals(Priority.HIGH, t.priority)
+        assertEquals("every month", t.recurrence)
+        assertEquals("报税", t.text)
+    }
+
+    @Test
+    fun `subtask indent level`() {
+        assertEquals(0, TaskParser.parseLine("- [ ] 父")!!.indent)
+        assertEquals(1, TaskParser.parseLine("  - [ ] 子")!!.indent)
+        assertEquals(2, TaskParser.parseLine("    - [ ] 孙")!!.indent)
+        assertEquals(1, TaskParser.parseLine("\t- [ ] tab子")!!.indent)
+    }
+
+    // ---- 循环任务 ----
+
+    @Test
+    fun `recurring task detected`() {
+        val t = TaskParser.parseLine("- [ ] 浇花 🔁 every week 📅 2026-07-12")!!
+        assertEquals("every week", t.recurrence)
+        assertTrue(t.isRecurring)
+    }
+
+    @Test
+    fun `complete recurring inserts next instance above`() {
+        val today = LocalDate.of(2026, 7, 12)
+        val content = "- [ ] 浇花 🔁 every week 📅 2026-07-12\n"
+        val result = TaskParser.completeInContent(content, "- [ ] 浇花 🔁 every week 📅 2026-07-12", today)!!
+        assertEquals(
+            "- [ ] 浇花 🔁 every week 📅 2026-07-19\n- [x] 浇花 🔁 every week 📅 2026-07-12 ✅ 2026-07-12\n",
+            result
+        )
+    }
+
+    @Test
+    fun `complete non-recurring has no extra line`() {
+        val today = LocalDate.of(2026, 7, 12)
+        val result = TaskParser.completeInContent("- [ ] 甲 📅 2026-07-12\n", "- [ ] 甲 📅 2026-07-12", today)!!
+        assertEquals("- [x] 甲 📅 2026-07-12 ✅ 2026-07-12\n", result)
+    }
+
+    @Test
+    fun `recurrence shifts all date fields together`() {
+        val next = TaskParser.nextRecurrenceLine(
+            "- [ ] a 🛫 2026-07-01 ⏳ 2026-07-05 📅 2026-07-10 🔁 every week",
+            LocalDate.of(2026, 7, 10)
+        )!!
+        assertTrue("start shifted", next.contains("🛫 2026-07-08"))
+        assertTrue("scheduled shifted", next.contains("⏳ 2026-07-12"))
+        assertTrue("due shifted", next.contains("📅 2026-07-17"))
     }
 }

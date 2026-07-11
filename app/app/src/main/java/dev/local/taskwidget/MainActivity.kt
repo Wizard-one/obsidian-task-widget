@@ -1,7 +1,9 @@
 package dev.local.taskwidget
 
+import android.Manifest
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.text.format.DateFormat
 import androidx.activity.ComponentActivity
@@ -10,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -21,8 +24,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
@@ -31,12 +37,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.updateAll
+import dev.local.taskwidget.data.QuickAdd
 import dev.local.taskwidget.data.VaultRepository
 import dev.local.taskwidget.widget.TaskWidget
 import dev.local.taskwidget.work.RefreshWorker
+import dev.local.taskwidget.work.ReminderScheduler
 import kotlinx.coroutines.launch
 import java.util.Date
 
@@ -45,9 +55,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         RefreshWorker.schedule(this)
+        ReminderScheduler.rescheduleAll(this)
         setContent {
             val dark = isSystemInDarkTheme()
-            MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
+            val ctx = LocalContext.current
+            val colors = when {
+                Build.VERSION.SDK_INT >= 31 ->
+                    if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
+                dark -> darkColorScheme()
+                else -> lightColorScheme()
+            }
+            MaterialTheme(colorScheme = colors) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     SettingsScreen()
                 }
@@ -59,10 +77,32 @@ class MainActivity : ComponentActivity() {
     private fun SettingsScreen() {
         val scope = rememberCoroutineScope()
         var vaultUri by remember { mutableStateOf(VaultRepository.getVaultUri(this)) }
+        var inboxName by remember { mutableStateOf(QuickAdd.getInboxName(this)) }
         var taskCount by remember { mutableStateOf(VaultRepository.loadTasks(this).size) }
         var lastScan by remember { mutableStateOf(VaultRepository.getLastScanTime(this)) }
         var scanning by remember { mutableStateOf(false) }
         var message by remember { mutableStateOf<String?>(null) }
+        var digestOn by remember { mutableStateOf(ReminderScheduler.isDigestEnabled(this)) }
+
+        val notifPermLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { /* 用户选择后无需额外处理 */ }
+
+        val inboxPicker = rememberLauncherForActivityResult(
+            ActivityResultContracts.OpenDocument()
+        ) { uri: Uri? ->
+            if (uri != null) {
+                runCatching {
+                    contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    )
+                }
+                val name = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':') ?: "inbox.md"
+                QuickAdd.setInbox(this, uri, name)
+                inboxName = name
+            }
+        }
 
         fun rescan() {
             scope.launch {
@@ -150,6 +190,66 @@ class MainActivity : ComponentActivity() {
                     message?.let {
                         Text(it, color = MaterialTheme.colorScheme.error)
                     }
+                }
+            }
+
+            Card {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("快速添加(收件箱)", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "选一个 .md 文件作为收件箱;之后从 widget ➕、下拉磁贴、分享文本、" +
+                            "选中文字都能快速把任务追加进去(支持自然语言日期,如“交房租 明天”)。",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text("当前:" + (inboxName ?: "尚未选择"), style = MaterialTheme.typography.bodyMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { inboxPicker.launch(arrayOf("text/*", "application/octet-stream", "*/*")) }) {
+                            Text(if (inboxName == null) "选择收件箱文件" else "更换")
+                        }
+                        OutlinedButton(
+                            onClick = { startActivity(Intent(this@MainActivity, QuickAddActivity::class.java)) },
+                            enabled = inboxName != null
+                        ) {
+                            Text("试试添加")
+                        }
+                    }
+                }
+            }
+
+            Card {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("提醒", style = MaterialTheme.typography.titleMedium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("每日早晨摘要通知", style = MaterialTheme.typography.bodyLarge)
+                        Switch(
+                            checked = digestOn,
+                            onCheckedChange = { on ->
+                                digestOn = on
+                                ReminderScheduler.setDigest(this@MainActivity, on, ReminderScheduler.getDigestHour(this@MainActivity))
+                                if (on && Build.VERSION.SDK_INT >= 33) {
+                                    notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            }
+                        )
+                    }
+                    Text(
+                        "每天 8:00 汇总“今天到期 + 已过期”任务数;午夜自动刷新 widget。",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
 
