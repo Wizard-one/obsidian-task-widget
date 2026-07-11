@@ -148,6 +148,14 @@ class MainActivity : ComponentActivity() {
                 style = MaterialTheme.typography.bodyMedium
             )
 
+            Button(
+                onClick = { startActivity(Intent(this@MainActivity, TaskListActivity::class.java)) },
+                enabled = vaultUri != null,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("浏览全部任务")
+            }
+
             Card {
                 Column(
                     modifier = Modifier
