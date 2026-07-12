@@ -3,9 +3,8 @@ package dev.local.taskwidget.work
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.glance.appwidget.updateAll
 import dev.local.taskwidget.data.VaultRepository
-import dev.local.taskwidget.widget.TaskWidget
+import dev.local.taskwidget.widget.updateAllWidgets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -19,7 +18,7 @@ class RefreshReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 VaultRepository.scan(context)
-                TaskWidget().updateAll(context)
+                updateAllWidgets(context)
                 RefreshWorker.schedule(context)
                 ReminderScheduler.rescheduleAll(context)
             } finally {

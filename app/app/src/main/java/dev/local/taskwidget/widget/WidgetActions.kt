@@ -12,6 +12,15 @@ import dev.local.taskwidget.data.VaultRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/** 刷新所有类型的 widget(任务清单 + 4 种日历类) */
+suspend fun updateAllWidgets(context: Context) {
+    TaskWidget().updateAll(context)
+    UpNextWidget().updateAll(context)
+    DailyAgendaWidget().updateAll(context)
+    MonthMiniWidget().updateAll(context)
+    MonthAgendaWidget().updateAll(context)
+}
+
 /** 勾选复选框:写回 markdown 文件并刷新 widget */
 class CompleteTaskAction : ActionCallback {
 
@@ -26,7 +35,7 @@ class CompleteTaskAction : ActionCallback {
             }
             VaultRepository.scan(context)
         }
-        TaskWidget().updateAll(context)
+        updateAllWidgets(context)
     }
 
     companion object {
@@ -40,10 +49,10 @@ class CompleteTaskAction : ActionCallback {
     }
 }
 
-/** 手动刷新:重新扫描 vault 并刷新 widget */
+/** 手动刷新:重新扫描 vault 并刷新所有 widget */
 class RefreshAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         VaultRepository.scan(context)
-        TaskWidget().updateAll(context)
+        updateAllWidgets(context)
     }
 }

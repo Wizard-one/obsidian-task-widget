@@ -9,11 +9,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import androidx.glance.appwidget.updateAll
 import dev.local.taskwidget.MainActivity
 import dev.local.taskwidget.R
 import dev.local.taskwidget.data.VaultRepository
-import dev.local.taskwidget.widget.TaskWidget
+import dev.local.taskwidget.widget.updateAllWidgets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -28,7 +27,7 @@ class ReminderReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 VaultRepository.scan(context)
-                TaskWidget().updateAll(context)
+                updateAllWidgets(context)
                 if (action == ReminderScheduler.ACTION_DIGEST) {
                     postDigest(context)
                 }

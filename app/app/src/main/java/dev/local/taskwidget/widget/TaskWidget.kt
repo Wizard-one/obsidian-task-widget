@@ -217,19 +217,3 @@ private fun TaskRow(task: TaskItem) {
     }
 }
 
-private fun priorityPrefix(order: Int): String = when (order) {
-    Priority.HIGHEST.order -> "🔺 "
-    Priority.HIGH.order -> "⏫ "
-    Priority.MEDIUM.order -> "🔼 "
-    else -> ""
-}
-
-private fun dueLabel(due: LocalDate): String {
-    val today = LocalDate.now()
-    return when {
-        due.isBefore(today) -> "已过期 · ${due.monthValue}/${due.dayOfMonth}"
-        due == today -> "今天"
-        due == today.plusDays(1) -> "明天"
-        else -> "${due.monthValue}/${due.dayOfMonth}"
-    }
-}

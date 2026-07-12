@@ -105,6 +105,54 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/task_widget_info" />
         </receiver>
+
+        <receiver
+            android:name=".widget.UpNextWidgetReceiver"
+            android:exported="true"
+            android:label="任务 · 接下来">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/upnext_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.DailyAgendaWidgetReceiver"
+            android:exported="true"
+            android:label="任务 · 每日议程">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/daily_agenda_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.MonthMiniWidgetReceiver"
+            android:exported="true"
+            android:label="任务 · 迷你月历">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/month_mini_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.MonthAgendaWidgetReceiver"
+            android:exported="true"
+            android:label="任务 · 月历+议程">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/month_agenda_widget_info" />
+        </receiver>
     </application>
 
 </manifest>
