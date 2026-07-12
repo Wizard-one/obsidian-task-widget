@@ -5,7 +5,9 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,8 +15,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -24,6 +30,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.darkColorScheme
@@ -31,12 +40,12 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -47,16 +56,16 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.glance.appwidget.updateAll
 import dev.local.taskwidget.data.Priority
 import dev.local.taskwidget.data.TaskItem
 import dev.local.taskwidget.data.VaultRepository
-import dev.local.taskwidget.widget.TaskWidget
+import dev.local.taskwidget.widget.updateAllWidgets
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.YearMonth
 
 /**
- * App 内任务浏览页:全库任务、搜索、按截止日期分组、按优先级/日期排序、勾选完成、点按编辑。
+ * App 内任务浏览页,三视图:列表(搜索/分组/排序)、看板(按到期分栏)、日历(月历+当日)。
  * 由 MainActivity 与 Search 磁贴进入。
  */
 class TaskListActivity : ComponentActivity() {
@@ -65,6 +74,7 @@ class TaskListActivity : ComponentActivity() {
         const val EXTRA_FOCUS_SEARCH = "focus_search"
     }
 
+    private enum class ViewMode(val label: String) { LIST("列表"), KANBAN("看板"), CALENDAR("日历") }
     private enum class SortMode(val label: String) { DUE("按日期"), PRIORITY("按优先级") }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -89,44 +99,41 @@ class TaskListActivity : ComponentActivity() {
         var tasks by remember { mutableStateOf(VaultRepository.loadTasks(this)) }
         var query by remember { mutableStateOf("") }
         var sort by remember { mutableStateOf(SortMode.DUE) }
+        var view by remember { mutableStateOf(ViewMode.LIST) }
         val searchFocus = remember { FocusRequester() }
         val focusSearch = intent?.getBooleanExtra(EXTRA_FOCUS_SEARCH, false) == true
         LaunchedEffect(Unit) { if (focusSearch) runCatching { searchFocus.requestFocus() } }
 
         fun reload() { tasks = VaultRepository.loadTasks(this) }
 
+        // 打开列表时后台重扫一次 vault(SAF 无法实时推送,以"进入即刷新"作为等效同步)
+        LaunchedEffect(Unit) {
+            VaultRepository.scan(this@TaskListActivity)
+            reload()
+        }
         fun refresh() {
             scope.launch {
-                VaultRepository.scan(this@TaskListActivity)
-                reload()
-                TaskWidget().updateAll(this@TaskListActivity)
+                VaultRepository.scan(this@TaskListActivity); reload(); updateAllWidgets(this@TaskListActivity)
             }
         }
-
         fun complete(task: TaskItem) {
             scope.launch {
                 VaultRepository.completeTask(this@TaskListActivity, task.fileUri, task.rawLine)
-                reload()
-                TaskWidget().updateAll(this@TaskListActivity)
+                reload(); updateAllWidgets(this@TaskListActivity)
             }
         }
-
-        val filtered = tasks.filter {
-            query.isBlank() ||
-                it.text.contains(query, true) ||
-                it.tags.any { t -> t.contains(query, true) } ||
-                it.path.contains(query, true)
+        fun edit(task: TaskItem) {
+            startActivity(
+                Intent(this, EditTaskActivity::class.java)
+                    .putExtra(EditTaskActivity.EXTRA_FILE_URI, task.fileUri)
+                    .putExtra(EditTaskActivity.EXTRA_RAW_LINE, task.rawLine)
+            )
         }
-        val sorted = when (sort) {
-            SortMode.DUE -> filtered.sortedWith(compareBy({ it.due ?: LocalDate.MAX }, { it.priorityOrder }))
-            SortMode.PRIORITY -> filtered.sortedWith(compareBy({ it.priorityOrder }, { it.due ?: LocalDate.MAX }))
-        }
-        val grouped = groupByDue(sorted)
 
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("全部任务 (${filtered.size})") },
+                    title = { Text("任务 (${tasks.size})") },
                     actions = {
                         IconButton(onClick = { refresh() }) {
                             Icon(painterResource(R.drawable.ic_refresh), contentDescription = "刷新")
@@ -139,40 +146,185 @@ class TaskListActivity : ComponentActivity() {
             }
         ) { padding ->
             Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    placeholder = { Text("搜索任务 / #标签 / 路径") },
-                    singleLine = true,
+                SingleChoiceSegmentedButtonRow(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
-                        .focusRequester(searchFocus)
-                )
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    SortMode.entries.forEach { m ->
-                        FilterChip(selected = sort == m, onClick = { sort = m }, label = { Text(m.label) })
+                    ViewMode.entries.forEachIndexed { i, m ->
+                        SegmentedButton(
+                            selected = view == m,
+                            onClick = { view = m },
+                            shape = SegmentedButtonDefaults.itemShape(i, ViewMode.entries.size)
+                        ) { Text(m.label) }
                     }
                 }
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    grouped.forEach { (header, items) ->
-                        item(key = "h_$header") { GroupHeader(header, items.size) }
-                        items(items, key = { it.fileUri + it.rawLine }) { task ->
-                            TaskRow(task, onComplete = { complete(task) }, onEdit = {
-                                startActivity(
-                                    Intent(this@TaskListActivity, EditTaskActivity::class.java)
-                                        .putExtra(EditTaskActivity.EXTRA_FILE_URI, task.fileUri)
-                                        .putExtra(EditTaskActivity.EXTRA_RAW_LINE, task.rawLine)
-                                )
-                            })
-                            HorizontalDivider()
+                when (view) {
+                    ViewMode.LIST -> ListView(tasks, query, { query = it }, sort, { sort = it }, searchFocus, ::complete, ::edit)
+                    ViewMode.KANBAN -> KanbanView(tasks, ::complete, ::edit)
+                    ViewMode.CALENDAR -> CalendarView(tasks, ::complete, ::edit)
+                }
+            }
+        }
+    }
+
+    // ---------------- 列表视图 ----------------
+
+    @Composable
+    private fun ListView(
+        tasks: List<TaskItem>,
+        query: String,
+        onQuery: (String) -> Unit,
+        sort: SortMode,
+        onSort: (SortMode) -> Unit,
+        searchFocus: FocusRequester,
+        onComplete: (TaskItem) -> Unit,
+        onEdit: (TaskItem) -> Unit,
+    ) {
+        val filtered = tasks.filter {
+            query.isBlank() || it.text.contains(query, true) ||
+                it.tags.any { t -> t.contains(query, true) } || it.path.contains(query, true)
+        }
+        val sorted = when (sort) {
+            SortMode.DUE -> filtered.sortedWith(compareBy({ it.due ?: LocalDate.MAX }, { it.priorityOrder }))
+            SortMode.PRIORITY -> filtered.sortedWith(compareBy({ it.priorityOrder }, { it.due ?: LocalDate.MAX }))
+        }
+        val grouped = groupByDue(sorted)
+
+        Column(modifier = Modifier.fillMaxSize()) {
+            OutlinedTextField(
+                value = query, onValueChange = onQuery,
+                placeholder = { Text("搜索任务 / #标签 / 路径") }, singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).focusRequester(searchFocus)
+            )
+            Row(modifier = Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SortMode.entries.forEach { m ->
+                    FilterChip(selected = sort == m, onClick = { onSort(m) }, label = { Text(m.label) })
+                }
+            }
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                grouped.forEach { (header, items) ->
+                    item(key = "h_$header") { GroupHeader(header, items.size) }
+                    items(items, key = { it.fileUri + it.rawLine }) { task ->
+                        TaskRow(task, { onComplete(task) }, { onEdit(task) })
+                        HorizontalDivider()
+                    }
+                }
+            }
+        }
+    }
+
+    // ---------------- 看板视图 ----------------
+
+    @Composable
+    private fun KanbanView(tasks: List<TaskItem>, onComplete: (TaskItem) -> Unit, onEdit: (TaskItem) -> Unit) {
+        val columns = groupByDue(tasks.sortedWith(compareBy({ it.due ?: LocalDate.MAX }, { it.priorityOrder })))
+        Row(
+            modifier = Modifier.fillMaxSize().horizontalScroll(rememberScrollState()).padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            columns.forEach { (header, items) ->
+                Column(modifier = Modifier.width(260.dp).fillMaxSize()) {
+                    Text(
+                        "$header · ${items.size}",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        items.forEach { task ->
+                            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onEdit(task) }) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(end = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(checked = false, onCheckedChange = { onComplete(task) })
+                                    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                                        Text(priorityPrefix(task.priorityOrder) + task.text, fontSize = 14.sp)
+                                        task.due?.let { DueText(it) }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
         }
     }
+
+    // ---------------- 日历视图 ----------------
+
+    @Composable
+    private fun CalendarView(tasks: List<TaskItem>, onComplete: (TaskItem) -> Unit, onEdit: (TaskItem) -> Unit) {
+        var month by remember { mutableStateOf(YearMonth.now()) }
+        var selected by remember { mutableStateOf(LocalDate.now()) }
+        val today = LocalDate.now()
+        val byDate = tasks.filter { it.due != null }.groupBy { it.due!! }
+
+        Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                Text("${month.year}年${month.monthValue}月", style = MaterialTheme.typography.titleMedium)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    Text("‹", fontSize = 22.sp, modifier = Modifier.clickable { month = month.minusMonths(1) }.padding(horizontal = 10.dp))
+                    Text("今", fontSize = 16.sp, modifier = Modifier.clickable { month = YearMonth.now(); selected = today }.padding(horizontal = 8.dp))
+                    Text("›", fontSize = 22.sp, modifier = Modifier.clickable { month = month.plusMonths(1) }.padding(horizontal = 10.dp))
+                }
+            }
+            // 星期表头
+            Row(modifier = Modifier.fillMaxWidth()) {
+                listOf("一", "二", "三", "四", "五", "六", "日").forEach {
+                    Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(1f))
+                }
+            }
+            // 网格
+            val first = month.atDay(1)
+            val gridStart = first.minusDays((first.dayOfWeek.value - 1).toLong())
+            for (week in 0 until 6) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    for (dow in 0 until 7) {
+                        val d = gridStart.plusDays((week * 7 + dow).toLong())
+                        val count = byDate[d]?.size ?: 0
+                        val bg = when {
+                            d == selected -> MaterialTheme.colorScheme.primaryContainer
+                            d == today -> MaterialTheme.colorScheme.secondaryContainer
+                            else -> Color.Transparent
+                        }
+                        Column(
+                            modifier = Modifier.weight(1f).padding(1.dp).clickable { selected = d }
+                                .padding(2.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                d.dayOfMonth.toString(),
+                                fontSize = 13.sp,
+                                fontWeight = if (d == today) FontWeight.Bold else FontWeight.Normal,
+                                color = if (d.month == month.month) MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.background(bg).padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                            Text(if (count > 0) "•" else " ", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+            Text("${selected.monthValue}月${selected.dayOfMonth}日", style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 8.dp))
+            val dayTasks = (byDate[selected] ?: emptyList()).sortedBy { it.priorityOrder }
+            if (dayTasks.isEmpty()) {
+                Text("当天无任务", style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(dayTasks, key = { it.fileUri + it.rawLine }) { task ->
+                        TaskRow(task, { onComplete(task) }, { onEdit(task) })
+                        HorizontalDivider()
+                    }
+                }
+            }
+        }
+    }
+
+    // ---------------- 共享小组件 ----------------
 
     @Composable
     private fun GroupHeader(title: String, count: Int) {
@@ -193,27 +345,23 @@ class TaskListActivity : ComponentActivity() {
             Checkbox(checked = false, onCheckedChange = { onComplete() })
             Column(modifier = Modifier.padding(vertical = 4.dp)) {
                 Text(priorityPrefix(task.priorityOrder) + task.text, fontSize = 15.sp)
-                val due = task.due
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (due != null) {
-                        Text(
-                            dueLabel(due),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = if (due.isBefore(LocalDate.now())) Color(0xFFD32F2F)
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    task.due?.let { DueText(it) }
                     if (task.tags.isNotEmpty()) {
-                        Text(
-                            task.tags.joinToString(" ") { "#$it" },
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text(task.tags.joinToString(" ") { "#$it" }, fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
         }
+    }
+
+    @Composable
+    private fun DueText(due: LocalDate) {
+        Text(
+            dueLabel(due), fontSize = 12.sp, fontWeight = FontWeight.Medium,
+            color = if (due.isBefore(LocalDate.now())) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 
     private fun groupByDue(tasks: List<TaskItem>): List<Pair<String, List<TaskItem>>> {

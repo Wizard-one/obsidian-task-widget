@@ -217,8 +217,16 @@ object VaultRepository {
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             val uri = Uri.parse(fileUriStr)
+            val docBefore = DocumentFile.fromSingleUri(context, uri)
+            val modifiedBefore = docBefore?.lastModified() ?: 0L
             val content = readDocument(context, uri) ?: return@withContext false
             val updated = transform(content) ?: return@withContext false
+
+            // 冲突防护:写之前复查文件是否被外部改动过(如 Obsidian 同时在编辑)
+            val modifiedNow = DocumentFile.fromSingleUri(context, uri)?.lastModified() ?: 0L
+            if (modifiedBefore > 0 && modifiedNow > 0 && modifiedNow != modifiedBefore) {
+                return@withContext false // 交给调用方重新扫描后再试
+            }
 
             // "wt" 确保截断旧内容
             context.contentResolver.openOutputStream(uri, "wt")?.use { out ->

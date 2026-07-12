@@ -9,16 +9,18 @@ import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.updateAll
 import dev.local.taskwidget.data.TaskItem
 import dev.local.taskwidget.data.VaultRepository
+import dev.local.taskwidget.work.BadgeUpdater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** 刷新所有类型的 widget(任务清单 + 4 种日历类) */
+/** 刷新所有类型的 widget(任务清单 + 4 种日历类)并更新桌面角标 */
 suspend fun updateAllWidgets(context: Context) {
     TaskWidget().updateAll(context)
     UpNextWidget().updateAll(context)
     DailyAgendaWidget().updateAll(context)
     MonthMiniWidget().updateAll(context)
     MonthAgendaWidget().updateAll(context)
+    BadgeUpdater.update(context)
 }
 
 /** 勾选复选框:写回 markdown 文件并刷新 widget */

@@ -1,8 +1,22 @@
 # 任务小组件 (TaskWidget)
 
-一个极简的安卓 App:只做一件事——把 Obsidian vault 里的待办任务放到主屏幕 widget 上,
-直接勾选完成,改动实时写回 markdown 文件。灵感来自 [TaskForge](https://taskforge.md/) 的
-widget 功能,但去掉了其余所有复杂功能。
+一个把 Obsidian vault 待办任务搬到安卓桌面的 App:主屏幕 widget 勾选完成、改动实时写回
+markdown。这是对 [TaskForge](https://taskforge.md/) 的 clean-room 复刻——**复现了除计费
+(RevenueCat)外的全部机制**,但用纯 Kotlin + Jetpack Glance 实现(原版是 Flutter + Rust)。
+
+## 与 TaskForge 的对应
+
+| TaskForge 机制 | 本项目 |
+|---|---|
+| 5 种 widget(任务清单 + 每日议程/月+议程/迷你月历/UpNext) | ✅ 全部 |
+| 快速添加(widget/磁贴/分享/选词)+ 自然语言日期 | ✅ |
+| 完整 Obsidian Tasks + Dataview + 循环任务 | ✅ |
+| 快捷设置磁贴(快速添加/搜索) | ✅ |
+| App 视图:列表 / 看板 Kanban / 日历 | ✅ |
+| 本地通知提醒 + 精确闹钟 | ✅ 每日摘要 |
+| 桌面角标未完成数 | ✅ |
+| Material You 动态取色 | ✅ |
+| RevenueCat 计费 / 账号 / 云分析 | ❌ 有意不做 |
 
 ## 功能
 
@@ -32,6 +46,9 @@ widget 功能,但去掉了其余所有复杂功能。
 - 循环任务只处理 emoji 格式的日期字段(Dataview 格式循环仅识别不重排)
 - 复杂 RRULE(如 "every 2nd monday")暂不支持,覆盖常见 "every ..." 语法
 - 提醒为每日摘要,非逐任务精确到点提醒
+- 用 SAF 文件夹授权(不申请"所有文件访问"),因此无法像原版那样实时监听文件改动;
+  以"每 30 分钟 + 进入 App/widget 交互时"重扫作为等效同步
+- 桌面角标依赖启动器支持(Nova/Apex/三星/Sony 等),不支持的启动器会忽略
 
 ## 构建
 
