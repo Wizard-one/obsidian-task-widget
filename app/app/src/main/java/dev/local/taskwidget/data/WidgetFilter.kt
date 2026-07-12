@@ -18,6 +18,8 @@ data class WidgetFilter(
     val tags: List<String> = emptyList(),
     /** 文件路径包含(不区分大小写),空 = 不筛。如 "工作/" 或 "Tasks.md" */
     val pathContains: String = "",
+    /** 排除路径(不区分大小写),任务路径含其中任意一项则隐藏;空 = 不排除。 */
+    val excludePaths: List<String> = emptyList(),
 ) {
 
     fun apply(tasks: List<TaskItem>, today: LocalDate = LocalDate.now()): List<TaskItem> =
@@ -32,7 +34,8 @@ data class WidgetFilter(
             val tagOk = tags.isEmpty() || tags.any { it in task.tags }
             val pathOk = pathContains.isBlank() ||
                 task.path.contains(pathContains.trim(), ignoreCase = true)
-            dateOk && tagOk && pathOk
+            val notExcluded = excludePaths.none { task.path.contains(it, ignoreCase = true) }
+            dateOk && tagOk && pathOk && notExcluded
         }
 
     fun toJson(): String = JSONObject()
@@ -41,6 +44,7 @@ data class WidgetFilter(
         .put("includeUndated", includeUndated)
         .put("tags", JSONArray(tags))
         .put("pathContains", pathContains)
+        .put("excludePaths", JSONArray(excludePaths))
         .toString()
 
     companion object {
@@ -61,12 +65,17 @@ data class WidgetFilter(
                 o.optJSONArray("tags")?.let { arr ->
                     for (i in 0 until arr.length()) tags += arr.getString(i)
                 }
+                val excludes = mutableListOf<String>()
+                o.optJSONArray("excludePaths")?.let { arr ->
+                    for (i in 0 until arr.length()) excludes += arr.getString(i)
+                }
                 WidgetFilter(
                     title = o.optString("title", "任务").ifBlank { "任务" },
                     dateScope = o.optInt("dateScope", SCOPE_ALL),
                     includeUndated = o.optBoolean("includeUndated", true),
                     tags = tags,
                     pathContains = o.optString("pathContains", ""),
+                    excludePaths = excludes,
                 )
             } catch (_: Exception) {
                 WidgetFilter()
@@ -77,6 +86,12 @@ data class WidgetFilter(
         fun parseTagsInput(input: String): List<String> =
             input.split(',', ' ', ';', '，', '；')
                 .map { it.trim().removePrefix("#") }
+                .filter { it.isNotEmpty() }
+
+        /** 把用户输入的路径串(逗号/分号分隔)规范化为路径片段列表(保留斜杠/空格) */
+        fun parsePathsInput(input: String): List<String> =
+            input.split(',', ';', '，', '；')
+                .map { it.trim() }
                 .filter { it.isNotEmpty() }
     }
 }

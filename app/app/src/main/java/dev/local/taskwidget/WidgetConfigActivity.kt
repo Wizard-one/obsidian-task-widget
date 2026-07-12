@@ -15,14 +15,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import dev.local.taskwidget.data.WidgetFilter
+import dev.local.taskwidget.ui.AppTheme
 import dev.local.taskwidget.widget.TaskWidget
 import dev.local.taskwidget.widget.WidgetFilterStore
 import kotlinx.coroutines.launch
@@ -44,6 +45,7 @@ class WidgetConfigActivity : ComponentActivity() {
 
     private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
 
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -64,17 +66,17 @@ class WidgetConfigActivity : ComponentActivity() {
         }
 
         setContent {
-            val dark = isSystemInDarkTheme()
-            MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    ConfigScreen()
-                }
+            AppTheme {
+                Scaffold(
+                    topBar = { CenterAlignedTopAppBar(title = { Text("Widget 筛选设置") }) }
+                ) { padding -> ConfigScreen(padding) }
             }
         }
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
     @androidx.compose.runtime.Composable
-    private fun ConfigScreen() {
+    private fun ConfigScreen(contentPadding: androidx.compose.foundation.layout.PaddingValues) {
         val scope = rememberCoroutineScope()
         val initial = remember { WidgetFilterStore.load(this, appWidgetId) }
 
@@ -83,16 +85,16 @@ class WidgetConfigActivity : ComponentActivity() {
         var includeUndated by remember { mutableStateOf(initial.includeUndated) }
         var tagsInput by remember { mutableStateOf(initial.tags.joinToString(", ")) }
         var pathContains by remember { mutableStateOf(initial.pathContains) }
+        var pathExcludes by remember { mutableStateOf(initial.excludePaths.joinToString(", ")) }
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp),
+                .padding(contentPadding)
+                .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Widget 筛选设置", style = MaterialTheme.typography.headlineSmall)
-
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
@@ -133,6 +135,14 @@ class WidgetConfigActivity : ComponentActivity() {
                 modifier = Modifier.fillMaxWidth()
             )
 
+            OutlinedTextField(
+                value = pathExcludes,
+                onValueChange = { pathExcludes = it },
+                label = { Text("排除路径(逗号分隔,如 Templates/, Archive/)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
             Button(
                 onClick = {
                     val filter = WidgetFilter(
@@ -141,6 +151,7 @@ class WidgetConfigActivity : ComponentActivity() {
                         includeUndated = includeUndated,
                         tags = WidgetFilter.parseTagsInput(tagsInput),
                         pathContains = pathContains.trim(),
+                        excludePaths = WidgetFilter.parsePathsInput(pathExcludes),
                     )
                     WidgetFilterStore.save(this@WidgetConfigActivity, appWidgetId, filter)
                     scope.launch {

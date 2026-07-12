@@ -20,17 +20,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,12 +38,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.glance.appwidget.updateAll
+import dev.local.taskwidget.data.ObsidianLink
 import dev.local.taskwidget.data.QuickAdd
 import dev.local.taskwidget.data.VaultRepository
-import dev.local.taskwidget.widget.TaskWidget
+import dev.local.taskwidget.ui.AppTheme
+import dev.local.taskwidget.widget.updateAllWidgets
 import dev.local.taskwidget.work.RefreshWorker
 import dev.local.taskwidget.work.ReminderScheduler
 import kotlinx.coroutines.launch
@@ -52,29 +51,24 @@ import java.util.Date
 
 class MainActivity : ComponentActivity() {
 
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         RefreshWorker.schedule(this)
         ReminderScheduler.rescheduleAll(this)
         setContent {
-            val dark = isSystemInDarkTheme()
-            val ctx = LocalContext.current
-            val colors = when {
-                Build.VERSION.SDK_INT >= 31 ->
-                    if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-                dark -> darkColorScheme()
-                else -> lightColorScheme()
-            }
-            MaterialTheme(colorScheme = colors) {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    SettingsScreen()
+            AppTheme {
+                Scaffold(
+                    topBar = { CenterAlignedTopAppBar(title = { Text("任务小组件") }) }
+                ) { padding ->
+                    SettingsScreen(padding)
                 }
             }
         }
     }
 
     @Composable
-    private fun SettingsScreen() {
+    private fun SettingsScreen(contentPadding: PaddingValues) {
         val scope = rememberCoroutineScope()
         var vaultUri by remember { mutableStateOf(VaultRepository.getVaultUri(this)) }
         var inboxName by remember { mutableStateOf(QuickAdd.getInboxName(this)) }
@@ -83,6 +77,7 @@ class MainActivity : ComponentActivity() {
         var scanning by remember { mutableStateOf(false) }
         var message by remember { mutableStateOf<String?>(null) }
         var digestOn by remember { mutableStateOf(ReminderScheduler.isDigestEnabled(this)) }
+        var excludePaths by remember { mutableStateOf(VaultRepository.getExcludePathsRaw(this)) }
 
         val notifPermLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.RequestPermission()
@@ -115,7 +110,7 @@ class MainActivity : ComponentActivity() {
                     taskCount = VaultRepository.loadTasks(this@MainActivity).size
                 }
                 lastScan = VaultRepository.getLastScanTime(this@MainActivity)
-                TaskWidget().updateAll(this@MainActivity)
+                updateAllWidgets(this@MainActivity)
                 scanning = false
             }
         }
@@ -138,10 +133,10 @@ class MainActivity : ComponentActivity() {
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp),
+                .padding(contentPadding)
+                .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("任务小组件", style = MaterialTheme.typography.headlineMedium)
             Text(
                 "在主屏幕 widget 上直接查看、勾选完成 Obsidian vault 里的任务," +
                     "改动直接写回 markdown 文件(兼容 Obsidian Tasks 插件格式)。",
@@ -268,14 +263,42 @@ class MainActivity : ComponentActivity() {
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    Text("全局排除路径", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "逗号分隔;路径含其中任意一项的任务将在列表/看板/日历和所有 widget 中隐藏。" +
+                            "常用于排除模板、归档等,如:Templates/, Archive/, .trash",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedTextField(
+                        value = excludePaths,
+                        onValueChange = {
+                            excludePaths = it
+                            VaultRepository.setExcludePaths(this@MainActivity, it)
+                        },
+                        placeholder = { Text("Templates/, Archive/") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedButton(onClick = { rescan() }, enabled = vaultUri != null) {
+                        Text("应用并刷新")
+                    }
+                }
+            }
+
+            Card {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text("使用说明", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "1. 选好 Vault 文件夹后,长按主屏幕空白处 → 小部件 → 添加“任务清单”,添加时可设置筛选(日期范围 / #标签 / 路径)。\n" +
-                            "2. 点 widget 上的齿轮可随时改筛选;可添加多个 widget,各自不同筛选。\n" +
-                            "3. 点任务文字可编辑内容、截止日期、优先级;勾选完成会写入 ✅ 日期。\n" +
-                            "4. widget 每 30 分钟自动扫描一次,也可点右上角手动刷新。\n" +
-                            "5. 支持语法:📅 截止日期、🔺⏫🔼🔽⏬ 优先级、#标签。\n" +
-                            "6. 暂不支持 🔁 循环任务(勾选只标记完成,不生成下一次)。",
+                        "1. 选好 Vault 文件夹后,长按主屏幕空白处 → 小部件,可添加「任务清单」和 4 种日历类 widget;任务清单添加时可设筛选(日期 / #标签 / 路径 / 排除路径)。\n" +
+                            "2. 「浏览全部任务」里可切换 列表 / 看板 / 日历 三视图。\n" +
+                            "3. 点任务文字可编辑内容、截止日期、优先级,并可「在 Obsidian 中打开」;勾选完成写入 ✅ 日期,循环任务(🔁)会自动生成下一次。\n" +
+                            "4. 快速添加支持自然语言日期(如“交房租 明天 ⏫”)。\n" +
+                            "5. 支持语法:📅⏳🛫➕✅❌ 日期、🔺⏫🔼🔽⏬ 优先级、#标签、Dataview 内联字段。",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }

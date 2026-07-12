@@ -13,19 +13,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,12 +37,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import androidx.glance.appwidget.updateAll
+import dev.local.taskwidget.data.ObsidianLink
 import dev.local.taskwidget.data.Priority
 import dev.local.taskwidget.data.TaskParser
 import dev.local.taskwidget.data.VaultRepository
-import dev.local.taskwidget.widget.TaskWidget
+import dev.local.taskwidget.ui.AppTheme
+import dev.local.taskwidget.widget.updateAllWidgets
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -55,6 +60,7 @@ class EditTaskActivity : ComponentActivity() {
         const val EXTRA_RAW_LINE = "rawLine"
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -65,12 +71,32 @@ class EditTaskActivity : ComponentActivity() {
             finish()
             return
         }
+        // 查出该任务的 vault 相对路径,用于"在 Obsidian 中打开"
+        val path = VaultRepository.loadTasks(this)
+            .find { it.fileUri == fileUri && it.rawLine == rawLine }?.path ?: ""
 
         setContent {
-            val dark = isSystemInDarkTheme()
-            MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    EditScreen(fileUri, rawLine, parsed.text, parsed.dueDate, parsed.priority)
+            AppTheme {
+                Scaffold(
+                    topBar = {
+                        TopAppBar(
+                            title = { Text("编辑任务") },
+                            navigationIcon = {
+                                IconButton(onClick = { finish() }) {
+                                    Icon(painterResource(R.drawable.ic_close), contentDescription = "返回")
+                                }
+                            },
+                            actions = {
+                                if (path.isNotBlank()) {
+                                    IconButton(onClick = { ObsidianLink.open(this@EditTaskActivity, path) }) {
+                                        Icon(painterResource(R.drawable.ic_obsidian), contentDescription = "在 Obsidian 中打开")
+                                    }
+                                }
+                            }
+                        )
+                    }
+                ) { padding ->
+                    EditScreen(padding, fileUri, rawLine, path, parsed.text, parsed.dueDate, parsed.priority)
                 }
             }
         }
@@ -79,8 +105,10 @@ class EditTaskActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     private fun EditScreen(
+        contentPadding: PaddingValues,
         fileUri: String,
         rawLine: String,
+        path: String,
         initialText: String,
         initialDue: LocalDate?,
         initialPriority: Priority,
@@ -96,17 +124,26 @@ class EditTaskActivity : ComponentActivity() {
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp),
+                .padding(contentPadding)
+                .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("编辑任务", style = MaterialTheme.typography.headlineSmall)
-
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
                 label = { Text("任务内容(可含 #标签)") },
                 modifier = Modifier.fillMaxWidth()
             )
+
+            if (path.isNotBlank()) {
+                FilledTonalButton(
+                    onClick = { ObsidianLink.open(this@EditTaskActivity, path) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(painterResource(R.drawable.ic_obsidian), contentDescription = null)
+                    Text("  在 Obsidian 中打开")
+                }
+            }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("截止日期", style = MaterialTheme.typography.titleMedium)
@@ -155,7 +192,7 @@ class EditTaskActivity : ComponentActivity() {
                                 ).show()
                                 VaultRepository.scan(this@EditTaskActivity)
                             }
-                            TaskWidget().updateAll(this@EditTaskActivity)
+                            updateAllWidgets(this@EditTaskActivity)
                             finish()
                         }
                     },

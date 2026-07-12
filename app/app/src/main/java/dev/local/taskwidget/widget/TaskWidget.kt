@@ -80,10 +80,10 @@ private fun WidgetContent(
         modifier = GlanceModifier
             .fillMaxSize()
             .background(GlanceTheme.colors.widgetBackground)
-            .padding(12.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
         Header(filter.title, tasks.size, appWidgetId)
-        Spacer(GlanceModifier.height(8.dp))
+        Spacer(GlanceModifier.height(4.dp))
         when {
             !configured -> CenterHint("尚未选择 Vault\n点击这里去设置")
             tasks.isEmpty() -> CenterHint("🎉 没有待办任务")
@@ -103,14 +103,14 @@ private fun Header(title: String, count: Int, appWidgetId: Int) {
             text = title,
             style = TextStyle(
                 color = GlanceTheme.colors.onSurface,
-                fontSize = 16.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
             ),
             modifier = GlanceModifier.clickable(actionStartActivity<MainActivity>())
         )
         Text(
             text = "  $count",
-            style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 14.sp)
+            style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp)
         )
         Spacer(GlanceModifier.defaultWeight())
         val addIntent = Intent(context, dev.local.taskwidget.QuickAddActivity::class.java)
@@ -119,10 +119,10 @@ private fun Header(title: String, count: Int, appWidgetId: Int) {
             provider = ImageProvider(R.drawable.ic_add),
             contentDescription = "快速添加",
             modifier = GlanceModifier
-                .size(22.dp)
+                .size(18.dp)
                 .clickable(actionStartActivityIntent(addIntent))
         )
-        Spacer(GlanceModifier.width(10.dp))
+        Spacer(GlanceModifier.width(12.dp))
         if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
             val configIntent = Intent(context, WidgetConfigActivity::class.java)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
@@ -131,16 +131,16 @@ private fun Header(title: String, count: Int, appWidgetId: Int) {
                 provider = ImageProvider(R.drawable.ic_settings),
                 contentDescription = "筛选设置",
                 modifier = GlanceModifier
-                    .size(22.dp)
+                    .size(18.dp)
                     .clickable(actionStartActivityIntent(configIntent))
             )
-            Spacer(GlanceModifier.width(10.dp))
+            Spacer(GlanceModifier.width(12.dp))
         }
         Image(
             provider = ImageProvider(R.drawable.ic_refresh),
             contentDescription = "刷新",
             modifier = GlanceModifier
-                .size(22.dp)
+                .size(18.dp)
                 .clickable(actionRunCallback<RefreshAction>())
         )
     }
@@ -181,7 +181,7 @@ private fun TaskRow(task: TaskItem) {
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 1.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         CheckBox(
@@ -197,8 +197,8 @@ private fun TaskRow(task: TaskItem) {
         ) {
             Text(
                 text = priorityPrefix(task.priorityOrder) + task.text,
-                style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 14.sp),
-                maxLines = 2
+                style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 13.sp),
+                maxLines = 1
             )
             val due = task.due
             if (due != null) {
@@ -209,7 +209,7 @@ private fun TaskRow(task: TaskItem) {
                             ColorProvider(Color(0xFFD32F2F), Color(0xFFFF8A80))
                         else
                             GlanceTheme.colors.onSurfaceVariant,
-                        fontSize = 12.sp
+                        fontSize = 11.sp
                     )
                 )
             }

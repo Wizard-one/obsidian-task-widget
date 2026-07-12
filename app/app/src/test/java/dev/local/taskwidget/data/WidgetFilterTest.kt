@@ -73,6 +73,28 @@ class WidgetFilterTest {
     }
 
     @Test
+    fun `exclude paths hide matching tasks`() {
+        val result = WidgetFilter(excludePaths = listOf("工作/")).apply(tasks, today)
+        assertEquals(6, result.size)
+        assert(result.none { it.text == "工作目录" })
+    }
+
+    @Test
+    fun `exclude paths take priority over include`() {
+        // 既 include 工作/ 又 exclude 工作/ → 排除优先,结果为空
+        val result = WidgetFilter(pathContains = "工作/", excludePaths = listOf("工作/")).apply(tasks, today)
+        assertEquals(0, result.size)
+    }
+
+    @Test
+    fun `parse paths input keeps slashes`() {
+        assertEquals(
+            listOf("Templates/", "Archive/2025"),
+            WidgetFilter.parsePathsInput("Templates/, Archive/2025")
+        )
+    }
+
+    @Test
     fun `json round trip`() {
         val original = WidgetFilter(
             title = "工作",

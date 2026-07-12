@@ -33,7 +33,9 @@ object VaultRepository {
 
     private const val PREFS = "settings"
     private const val KEY_VAULT_URI = "vault_uri"
+    private const val KEY_VAULT_NAME = "vault_name"
     private const val KEY_LAST_SCAN = "last_scan"
+    private const val KEY_EXCLUDE_PATHS = "exclude_paths"
     private const val CACHE_FILE = "tasks_cache_v2.json"
 
     // ---------- 设置 ----------
@@ -43,13 +45,37 @@ object VaultRepository {
             .getString(KEY_VAULT_URI, null)?.let { Uri.parse(it) }
 
     fun setVaultUri(context: Context, uri: Uri) {
+        val name = DocumentFile.fromTreeUri(context, uri)?.name ?: ""
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(KEY_VAULT_URI, uri.toString()).apply()
+            .edit()
+            .putString(KEY_VAULT_URI, uri.toString())
+            .putString(KEY_VAULT_NAME, name)
+            .apply()
         cacheFile(context).delete()
     }
 
+    /** vault 根文件夹名(≈ Obsidian vault 名),用于拼 obsidian:// 链接 */
+    fun getVaultName(context: Context): String =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_VAULT_NAME, "") ?: ""
+
     fun getLastScanTime(context: Context): Long =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(KEY_LAST_SCAN, 0L)
+
+    /** 全局排除路径(逗号分隔,不区分大小写)。路径含其中任意一项的任务在所有视图/widget 中隐藏。 */
+    fun getExcludePaths(context: Context): List<String> =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_EXCLUDE_PATHS, "")!!
+            .split(',', ';', '，', '；')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+
+    fun getExcludePathsRaw(context: Context): String =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_EXCLUDE_PATHS, "") ?: ""
+
+    fun setExcludePaths(context: Context, raw: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString(KEY_EXCLUDE_PATHS, raw).apply()
+    }
 
     // ---------- 缓存 ----------
 
@@ -85,14 +111,19 @@ object VaultRepository {
             .put("lastModified", lastModified)
             .put("tasks", tasksToJson(tasks))
 
-    /** 读取缓存中的全部待办任务,按 截止日期(过期最前)→ 优先级 排序 */
+    /**
+     * 读取缓存中的全部待办任务,按 截止日期(过期最前)→ 优先级 排序。
+     * 应用全局排除路径:路径含任一排除项的任务在所有视图/widget 中都不返回。
+     */
     fun loadTasks(context: Context): List<TaskItem> {
         val files = loadCacheJson(context).optJSONObject("files") ?: return emptyList()
+        val excludes = getExcludePaths(context)
         val tasks = mutableListOf<TaskItem>()
         for (uri in files.keys()) {
             val f = files.getJSONObject(uri)
             val name = f.optString("name")
             val path = f.optString("path", name)
+            if (excludes.any { path.contains(it, ignoreCase = true) }) continue
             val arr = f.optJSONArray("tasks") ?: continue
             for (i in 0 until arr.length()) {
                 val t = arr.getJSONObject(i)
