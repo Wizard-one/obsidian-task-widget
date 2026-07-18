@@ -17,10 +17,14 @@ class RefreshReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                VaultRepository.scan(context)
+                // 先用缓存立即重绘 widget(开机后组件常处于"加载中"卡住,
+                // 若等慢扫描完再刷、goAsync 又被系统回收,就一直不激活)
                 updateAllWidgets(context)
                 RefreshWorker.schedule(context)
                 ReminderScheduler.rescheduleAll(context)
+                // 再做整库扫描,拿到最新内容后二次刷新
+                VaultRepository.scan(context)
+                updateAllWidgets(context)
             } finally {
                 pending.finish()
             }

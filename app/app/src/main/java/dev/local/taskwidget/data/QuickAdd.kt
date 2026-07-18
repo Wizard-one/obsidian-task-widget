@@ -65,8 +65,8 @@ object QuickAdd {
                 out.write(updated.toByteArray(Charsets.UTF_8))
             } ?: return@withContext null
 
-            // 追加后刷新缓存,让 widget 立即反映
-            VaultRepository.scan(context)
+            // 只增量重解析这一个 inbox 文件(整库扫描慢,会让"确定"看起来无响应)
+            VaultRepository.noteFileChanged(context, uri)
             line
         } catch (_: Exception) {
             null

@@ -35,9 +35,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.glance.appwidget.updateAll
 import dev.local.taskwidget.data.QuickAdd
-import dev.local.taskwidget.widget.TaskWidget
+import dev.local.taskwidget.widget.updateAllWidgets
 import kotlinx.coroutines.launch
 
 /**
@@ -99,7 +98,7 @@ class QuickAddActivity : ComponentActivity() {
                     ).show()
                 } else {
                     Toast.makeText(this@QuickAddActivity, "已添加", Toast.LENGTH_SHORT).show()
-                    TaskWidget().updateAll(this@QuickAddActivity)
+                    updateAllWidgets(this@QuickAddActivity)
                 }
                 finish()
             }

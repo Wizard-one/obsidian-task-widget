@@ -2,6 +2,7 @@ package dev.local.taskwidget.data
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -92,11 +93,14 @@ object VaultRepository {
     private fun tasksToJson(tasks: List<ParsedTask>): JSONArray {
         val arr = JSONArray()
         for (t in tasks) {
+            // 有效日期:优先截止日,其次计划日(⏳)、开始日(🛫)。
+            // 很多循环任务只有 ⏳/🛫 没有 📅,不取有效日期就进不了"今天/已过期"。
+            val effectiveDue = t.dueDate ?: t.scheduledDate ?: t.startDate
             arr.put(
                 JSONObject()
                     .put("rawLine", t.rawLine)
                     .put("text", t.text)
-                    .put("dueDate", t.dueDate?.toString() ?: JSONObject.NULL)
+                    .put("dueDate", effectiveDue?.toString() ?: JSONObject.NULL)
                     .put("priority", t.priority.order)
                     .put("tags", JSONArray(t.tags))
             )
@@ -157,43 +161,69 @@ object VaultRepository {
     /**
      * 全量遍历 vault,仅重新解析 lastModified 变化的文件,更新缓存。
      * 返回待办任务数;vault 未配置或不可访问时返回 null。
+     *
+     * 用 DocumentsContract 对每个目录做一次批量查询(一次 cursor 拿到子项的
+     * id/名称/类型/修改时间),而不是 DocumentFile 逐文件查询——后者每个文件的
+     * name/lastModified/isDirectory 都是一次独立的 SAF IPC,几百个文件会慢到卡死。
      */
     suspend fun scan(context: Context): Int? = withContext(Dispatchers.IO) {
-        val vaultUri = getVaultUri(context) ?: return@withContext null
-        val root = DocumentFile.fromTreeUri(context, vaultUri) ?: return@withContext null
-        if (!root.isDirectory) return@withContext null
-
+        val treeUri = getVaultUri(context) ?: return@withContext null
+        val rootDocId = try {
+            DocumentsContract.getTreeDocumentId(treeUri)
+        } catch (_: Exception) {
+            return@withContext null
+        }
+        val resolver = context.contentResolver
         val oldFiles = loadCacheJson(context).optJSONObject("files") ?: JSONObject()
         val newFiles = JSONObject()
         var count = 0
 
-        val stack = ArrayDeque<Pair<DocumentFile, String>>()
-        stack.addLast(root to "")
+        val projection = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+        )
+
+        val stack = ArrayDeque<Pair<String, String>>() // documentId, 相对路径
+        stack.addLast(rootDocId to "")
         while (stack.isNotEmpty()) {
-            val (dir, relPath) = stack.removeLast()
-            for (child in dir.listFiles()) {
-                val name = child.name ?: continue
-                val childPath = if (relPath.isEmpty()) name else "$relPath/$name"
-                if (child.isDirectory) {
-                    if (!name.startsWith(".")) stack.addLast(child to childPath)
-                    continue
-                }
-                if (!name.endsWith(".md", ignoreCase = true)) continue
+            val (dirId, relPath) = stack.removeLast()
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, dirId)
+            val cursor = try {
+                resolver.query(childrenUri, projection, null, null, null)
+            } catch (_: Exception) {
+                null
+            } ?: continue
+            cursor.use { c ->
+                while (c.moveToNext()) {
+                    val docId = c.getString(0)
+                    val name = c.getString(1) ?: continue
+                    val mime = c.getString(2)
+                    val lastModified = if (c.isNull(3)) 0L else c.getLong(3)
+                    val childPath = if (relPath.isEmpty()) name else "$relPath/$name"
 
-                val uriStr = child.uri.toString()
-                val lastModified = child.lastModified()
-                val cached = oldFiles.optJSONObject(uriStr)
+                    if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
+                        if (!name.startsWith(".")) stack.addLast(docId to childPath)
+                        continue
+                    }
+                    if (!name.endsWith(".md", ignoreCase = true)) continue
 
-                val entry = if (cached != null && cached.optLong("lastModified") == lastModified && lastModified > 0) {
-                    cached.put("path", childPath)
-                } else {
-                    val content = readDocument(context, child.uri)
-                    fileEntry(name, childPath, lastModified, content?.let { TaskParser.parseFile(it) } ?: emptyList())
+                    val docUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+                    val uriStr = docUri.toString()
+                    val cached = oldFiles.optJSONObject(uriStr)
+
+                    val entry = if (cached != null && cached.optLong("lastModified") == lastModified && lastModified > 0) {
+                        cached.put("path", childPath)
+                    } else {
+                        val content = readDocument(context, docUri)
+                        fileEntry(name, childPath, lastModified, content?.let { TaskParser.parseFile(it) } ?: emptyList())
+                    }
+                    val taskCount = entry.optJSONArray("tasks")?.length() ?: 0
+                    count += taskCount
+                    // 无任务的文件不进缓存,省空间
+                    if (taskCount > 0) newFiles.put(uriStr, entry)
                 }
-                val taskCount = entry.optJSONArray("tasks")?.length() ?: 0
-                count += taskCount
-                // 无任务的文件不进缓存,省空间
-                if (taskCount > 0) newFiles.put(uriStr, entry)
             }
         }
 
@@ -201,6 +231,26 @@ object VaultRepository {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putLong(KEY_LAST_SCAN, System.currentTimeMillis()).apply()
         count
+    }
+
+    /**
+     * 增量:只重解析单个文件并更新缓存(用于快速添加后,避免整库慢扫描)。
+     */
+    suspend fun noteFileChanged(context: Context, uri: Uri): Unit = withContext(Dispatchers.IO) {
+        try {
+            val content = readDocument(context, uri) ?: return@withContext
+            val files = loadCacheJson(context).optJSONObject("files") ?: JSONObject()
+            val key = uri.toString()
+            val old = files.optJSONObject(key)
+            val doc = DocumentFile.fromSingleUri(context, uri)
+            val name = old?.optString("name")?.ifEmpty { null } ?: doc?.name ?: ""
+            val path = old?.optString("path")?.ifEmpty { null } ?: name
+            val entry = fileEntry(name, path, doc?.lastModified() ?: 0L, TaskParser.parseFile(content))
+            if (entry.getJSONArray("tasks").length() > 0) files.put(key, entry) else files.remove(key)
+            cacheFile(context).writeText(JSONObject().put("files", files).toString())
+        } catch (_: Exception) {
+            // 忽略;下次整库扫描会补上
+        }
     }
 
     private fun readDocument(context: Context, uri: Uri): String? =
