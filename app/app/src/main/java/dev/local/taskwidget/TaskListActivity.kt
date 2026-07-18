@@ -157,9 +157,21 @@ class TaskListActivity : ComponentActivity() {
                         ) { Text(m.label) }
                     }
                 }
+                if (view != ViewMode.CALENDAR) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("排序", style = MaterialTheme.typography.labelMedium)
+                        SortMode.entries.forEach { m ->
+                            FilterChip(selected = sort == m, onClick = { sort = m }, label = { Text(m.label) })
+                        }
+                    }
+                }
                 when (view) {
-                    ViewMode.LIST -> ListView(tasks, query, { query = it }, sort, { sort = it }, searchFocus, ::complete, ::edit)
-                    ViewMode.KANBAN -> KanbanView(tasks, ::complete, ::edit)
+                    ViewMode.LIST -> ListView(tasks, query, { query = it }, sort, searchFocus, ::complete, ::edit)
+                    ViewMode.KANBAN -> KanbanView(tasks, sort, ::complete, ::edit)
                     ViewMode.CALENDAR -> CalendarView(tasks, ::complete, ::edit)
                 }
             }
@@ -174,7 +186,6 @@ class TaskListActivity : ComponentActivity() {
         query: String,
         onQuery: (String) -> Unit,
         sort: SortMode,
-        onSort: (SortMode) -> Unit,
         searchFocus: FocusRequester,
         onComplete: (TaskItem) -> Unit,
         onEdit: (TaskItem) -> Unit,
@@ -195,11 +206,6 @@ class TaskListActivity : ComponentActivity() {
                 placeholder = { Text("搜索任务 / #标签 / 路径") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).focusRequester(searchFocus)
             )
-            Row(modifier = Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SortMode.entries.forEach { m ->
-                    FilterChip(selected = sort == m, onClick = { onSort(m) }, label = { Text(m.label) })
-                }
-            }
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 grouped.forEach { (header, items) ->
                     item(key = "h_$header") { GroupHeader(header, items.size) }
@@ -215,8 +221,12 @@ class TaskListActivity : ComponentActivity() {
     // ---------------- 看板视图 ----------------
 
     @Composable
-    private fun KanbanView(tasks: List<TaskItem>, onComplete: (TaskItem) -> Unit, onEdit: (TaskItem) -> Unit) {
-        val columns = groupByDue(tasks.sortedWith(compareBy({ it.due ?: LocalDate.MAX }, { it.priorityOrder })))
+    private fun KanbanView(tasks: List<TaskItem>, sort: SortMode, onComplete: (TaskItem) -> Unit, onEdit: (TaskItem) -> Unit) {
+        val sorted = when (sort) {
+            SortMode.DUE -> tasks.sortedWith(compareBy({ it.due ?: LocalDate.MAX }, { it.priorityOrder }))
+            SortMode.PRIORITY -> tasks.sortedWith(compareBy({ it.priorityOrder }, { it.due ?: LocalDate.MAX }))
+        }
+        val columns = groupByDue(sorted)
         Row(
             modifier = Modifier.fillMaxSize().horizontalScroll(rememberScrollState()).padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)

@@ -75,7 +75,15 @@ class DailyAgendaWidget : GlanceAppWidget() {
                         !configured -> Centered("尚未选择 Vault")
                         entries.isEmpty() -> Centered("🎉 未来 7 天没有到期任务")
                         else -> LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                            items(entries) { entry ->
+                            items(
+                                entries,
+                                itemId = { e ->
+                                    when (e) {
+                                        is Entry.Head -> (e.date?.toEpochDay() ?: -100L)
+                                        is Entry.Task -> taskId(e.item)
+                                    }
+                                }
+                            ) { entry ->
                                 when (entry) {
                                     is Entry.Head -> AgendaHeader(entry.date)
                                     is Entry.Task -> AgendaTaskRow(entry.item, showDate = false)

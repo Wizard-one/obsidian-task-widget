@@ -1,6 +1,7 @@
 package dev.local.taskwidget.widget
 
 import android.content.Context
+import android.net.Uri
 import android.widget.Toast
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
@@ -32,10 +33,11 @@ class CompleteTaskAction : ActionCallback {
 
         val ok = VaultRepository.completeTask(context, fileUri, rawLine)
         if (!ok) {
+            // 找不到原行:只增量重解析这一个文件(不做整库慢扫描),让 widget 立即回到真实状态
+            VaultRepository.noteFileChanged(context, Uri.parse(fileUri))
             withContext(Dispatchers.Main) {
-                Toast.makeText(context, "写回失败,文件可能已被修改,正在重新扫描", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "该任务已变化,已刷新", Toast.LENGTH_SHORT).show()
             }
-            VaultRepository.scan(context)
         }
         updateAllWidgets(context)
     }

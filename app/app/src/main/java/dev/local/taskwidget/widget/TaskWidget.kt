@@ -164,7 +164,9 @@ private fun CenterHint(text: String) {
 @Composable
 private fun TaskList(tasks: List<TaskItem>) {
     LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-        items(tasks) { task ->
+        // 稳定 itemId(基于任务身份)——否则某行完成后被移除,下一行会顶上来复用同一 RemoteView,
+        // 导致复选框的"已勾选"视觉残留在新任务上;有了稳定 id,Glance 按身份重建行,勾选即消失
+        items(tasks, itemId = { taskId(it) }) { task ->
             TaskRow(task)
         }
     }
