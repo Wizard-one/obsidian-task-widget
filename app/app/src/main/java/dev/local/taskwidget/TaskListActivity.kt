@@ -40,6 +40,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +57,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import dev.local.taskwidget.data.Priority
 import dev.local.taskwidget.data.TaskItem
 import dev.local.taskwidget.data.VaultRepository
@@ -105,6 +108,15 @@ class TaskListActivity : ComponentActivity() {
         LaunchedEffect(Unit) { if (focusSearch) runCatching { searchFocus.requestFocus() } }
 
         fun reload() { tasks = VaultRepository.loadTasks(this) }
+
+        // 每次回到本页(如从快速添加/编辑返回)都从缓存重载,新增/改动的任务立即出现
+        DisposableEffect(Unit) {
+            val obs = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) reload()
+            }
+            this@TaskListActivity.lifecycle.addObserver(obs)
+            onDispose { this@TaskListActivity.lifecycle.removeObserver(obs) }
+        }
 
         // 打开列表时后台重扫一次 vault(SAF 无法实时推送,以"进入即刷新"作为等效同步)
         LaunchedEffect(Unit) {

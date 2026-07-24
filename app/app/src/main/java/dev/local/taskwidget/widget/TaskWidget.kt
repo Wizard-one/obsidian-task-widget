@@ -87,10 +87,16 @@ private fun WidgetContent(
         when {
             !configured -> CenterHint("尚未选择 Vault\n点击这里去设置")
             tasks.isEmpty() -> CenterHint("🎉 没有待办任务")
-            else -> TaskList(tasks)
+            else -> TaskList(tasks.take(WIDGET_MAX_ITEMS), tasks.size)
         }
     }
 }
+
+/**
+ * widget 单次最多渲染的任务条数。RemoteViews 通过 Binder 传给启动器有约 1MB 上限,
+ * 大 vault 一次上百条会超限,启动器报 "Can't show content";故做上限,超出在末尾提示。
+ */
+internal const val WIDGET_MAX_ITEMS = 50
 
 @Composable
 private fun Header(title: String, count: Int, appWidgetId: Int) {
@@ -162,12 +168,21 @@ private fun CenterHint(text: String) {
 }
 
 @Composable
-private fun TaskList(tasks: List<TaskItem>) {
+private fun TaskList(tasks: List<TaskItem>, total: Int) {
     LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
         // 稳定 itemId(基于任务身份)——否则某行完成后被移除,下一行会顶上来复用同一 RemoteView,
         // 导致复选框的"已勾选"视觉残留在新任务上;有了稳定 id,Glance 按身份重建行,勾选即消失
         items(tasks, itemId = { taskId(it) }) { task ->
             TaskRow(task)
+        }
+        if (total > tasks.size) {
+            item(itemId = -999L) {
+                Text(
+                    text = "还有 ${total - tasks.size} 条,点标题在 App 中查看",
+                    style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp),
+                    modifier = GlanceModifier.padding(vertical = 4.dp)
+                )
+            }
         }
     }
 }

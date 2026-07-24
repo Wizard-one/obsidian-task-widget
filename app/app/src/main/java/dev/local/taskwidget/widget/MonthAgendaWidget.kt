@@ -39,7 +39,7 @@ class MonthAgendaWidget : GlanceAppWidget() {
         val selected = CalendarWidgetState.selectedDay(context, appWidgetId)
         val configured = VaultRepository.getVaultUri(context) != null
         val cells = CalendarData.monthGrid(context, month)
-        val dayTasks = CalendarData.tasksOn(context, selected)
+        val dayTasks = CalendarData.tasksOn(context, selected).take(WIDGET_MAX_ITEMS)
 
         provideContent {
             GlanceTheme {

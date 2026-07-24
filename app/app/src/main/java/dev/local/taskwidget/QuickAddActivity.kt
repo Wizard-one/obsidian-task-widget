@@ -5,63 +5,58 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import dev.local.taskwidget.data.Priority
 import dev.local.taskwidget.data.QuickAdd
+import dev.local.taskwidget.ui.AppTheme
 import dev.local.taskwidget.widget.updateAllWidgets
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 /**
  * 轻量"快速添加"对话框 Activity。入口:桌面 widget ➕、快捷设置磁贴、分享文本、选词。
- * 以对话框主题呈现,加完即关闭。
+ * 支持截止日期 / 开始日期 / 优先级(TaskForge 式选择器 + 自然语言日期解析)。
  */
 class QuickAddActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         val shared = extractSharedText(intent)
-
         setContent {
-            val dark = isSystemInDarkTheme()
-            val ctx = LocalContext.current
-            val colors = when {
-                android.os.Build.VERSION.SDK_INT >= 31 ->
-                    if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-                dark -> darkColorScheme()
-                else -> lightColorScheme()
-            }
-            MaterialTheme(colorScheme = colors) {
-                QuickAddDialog(initial = shared)
-            }
+            AppTheme { QuickAddDialog(initial = shared) }
         }
     }
 
@@ -75,11 +70,16 @@ class QuickAddActivity : ComponentActivity() {
         }
     }
 
-    @androidx.compose.runtime.Composable
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
     private fun QuickAddDialog(initial: String) {
         val scope = rememberCoroutineScope()
         var text by remember { mutableStateOf(initial) }
+        var due by remember { mutableStateOf<LocalDate?>(null) }
+        var start by remember { mutableStateOf<LocalDate?>(null) }
+        var priority by remember { mutableStateOf(Priority.NONE) }
         var busy by remember { mutableStateOf(false) }
+        var picking by remember { mutableStateOf<String?>(null) } // "due" / "start" / null
         val focus = remember { FocusRequester() }
         val configured = QuickAdd.getInboxUri(this) != null
 
@@ -89,7 +89,7 @@ class QuickAddActivity : ComponentActivity() {
             if (busy || text.isBlank()) return
             busy = true
             scope.launch {
-                val line = QuickAdd.append(this@QuickAddActivity, text)
+                val line = QuickAdd.append(this@QuickAddActivity, text, due, start, priority)
                 if (line == null) {
                     Toast.makeText(
                         this@QuickAddActivity,
@@ -108,16 +108,45 @@ class QuickAddActivity : ComponentActivity() {
             onDismissRequest = { finish() },
             title = { Text("快速添加任务") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
                         value = text,
                         onValueChange = { text = it },
-                        placeholder = { Text("如:交房租 tomorrow ⏫") },
+                        placeholder = { Text("如:交房租 tomorrow") },
                         singleLine = false,
                         modifier = Modifier.fillMaxWidth().focusRequester(focus),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { submit() })
                     )
+
+                    // 日期选择
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AssistChip(
+                            onClick = { picking = "due" },
+                            label = { Text(due?.let { "📅 ${it.monthValue}/${it.dayOfMonth}" } ?: "📅 截止") }
+                        )
+                        AssistChip(
+                            onClick = { picking = "start" },
+                            label = { Text(start?.let { "🛫 ${it.monthValue}/${it.dayOfMonth}" } ?: "🛫 开始") }
+                        )
+                        if (due != null || start != null) {
+                            TextButton(onClick = { due = null; start = null }) { Text("清除") }
+                        }
+                    }
+
+                    // 优先级
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        priorityChoice("无", Priority.NONE, priority) { priority = it }
+                        priorityChoice("🔺", Priority.HIGHEST, priority) { priority = it }
+                        priorityChoice("⏫", Priority.HIGH, priority) { priority = it }
+                        priorityChoice("🔼", Priority.MEDIUM, priority) { priority = it }
+                        priorityChoice("🔽", Priority.LOW, priority) { priority = it }
+                        priorityChoice("⏬", Priority.LOWEST, priority) { priority = it }
+                    }
+
                     if (!configured) {
                         Text(
                             "尚未设置收件箱,请先在 App 主页选择一个 .md 文件",
@@ -139,5 +168,31 @@ class QuickAddActivity : ComponentActivity() {
                 TextButton(onClick = { finish() }) { Text("取消") }
             }
         )
+
+        if (picking != null) {
+            val target = picking!!
+            val initialMillis = ((if (target == "due") due else start) ?: LocalDate.now())
+                .atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+            val state = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+            DatePickerDialog(
+                onDismissRequest = { picking = null },
+                confirmButton = {
+                    TextButton(onClick = {
+                        state.selectedDateMillis?.let {
+                            val d = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
+                            if (target == "due") due = d else start = d
+                        }
+                        picking = null
+                    }) { Text("确定") }
+                },
+                dismissButton = { TextButton(onClick = { picking = null }) { Text("取消") } }
+            ) { DatePicker(state = state) }
+        }
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    private fun priorityChoice(label: String, value: Priority, current: Priority, onSelect: (Priority) -> Unit) {
+        FilterChip(selected = current == value, onClick = { onSelect(value) }, label = { Text(label) })
     }
 }

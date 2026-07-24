@@ -76,7 +76,7 @@ class DailyAgendaWidget : GlanceAppWidget() {
                         entries.isEmpty() -> Centered("🎉 未来 7 天没有到期任务")
                         else -> LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
                             items(
-                                entries,
+                                entries.take(WIDGET_MAX_ITEMS),
                                 itemId = { e ->
                                     when (e) {
                                         is Entry.Head -> (e.date?.toEpochDay() ?: -100L)
