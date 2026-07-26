@@ -105,7 +105,7 @@ private fun WidgetContent(
  * widget 单次最多渲染的任务条数。RemoteViews 通过 Binder 传给启动器有约 1MB 上限,
  * 大 vault 一次上百条会超限,启动器报 "Can't show content";故做上限,超出在末尾提示。
  */
-internal const val WIDGET_MAX_ITEMS = 50
+internal const val WIDGET_MAX_ITEMS = 20
 
 @Composable
 private fun Header(title: String, count: Int, appWidgetId: Int) {
@@ -178,10 +178,12 @@ private fun CenterHint(text: String) {
 
 @Composable
 private fun TaskList(tasks: List<TaskItem>, total: Int) {
+    // 去重确保 itemId 唯一(重复的 itemId 会让 Glance LazyColumn 抛错→"Can't show content")
+    val shown = tasks.distinctBy { taskId(it) }
     LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
         // 稳定 itemId(基于任务身份)——否则某行完成后被移除,下一行会顶上来复用同一 RemoteView,
         // 导致复选框的"已勾选"视觉残留在新任务上;有了稳定 id,Glance 按身份重建行,勾选即消失
-        items(tasks, itemId = { taskId(it) }) { task ->
+        items(shown, itemId = { taskId(it) }) { task ->
             TaskRow(task)
         }
         if (total > tasks.size) {

@@ -69,7 +69,7 @@ class UpNextWidget : GlanceAppWidget() {
                         !configured -> Hint("尚未选择 Vault")
                         tasks.isEmpty() -> Hint("🎉 没有待办任务")
                         else -> LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                            items(tasks, itemId = { taskId(it) }) { AgendaTaskRow(it, showDate = true) }
+                            items(tasks.distinctBy { taskId(it) }, itemId = { taskId(it) }) { AgendaTaskRow(it, showDate = true) }
                         }
                     }
                 }
