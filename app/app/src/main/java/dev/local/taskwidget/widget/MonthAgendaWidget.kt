@@ -38,8 +38,15 @@ class MonthAgendaWidget : GlanceAppWidget() {
         val month = YearMonth.now().plusMonths(offset.toLong())
         val selected = CalendarWidgetState.selectedDay(context, appWidgetId)
         val configured = VaultRepository.getVaultUri(context) != null
-        val cells = CalendarData.monthGrid(context, month)
-        val dayTasks = CalendarData.tasksOn(context, selected).take(WIDGET_MAX_ITEMS)
+        var errorMsg: String? = null
+        var cells: List<CalendarData.DayCell> = emptyList()
+        var dayTasks: List<dev.local.taskwidget.data.TaskItem> = emptyList()
+        try {
+            cells = CalendarData.monthGrid(context, month)
+            dayTasks = CalendarData.tasksOn(context, selected).take(WIDGET_MAX_ITEMS)
+        } catch (t: Throwable) {
+            errorMsg = "${t.javaClass.simpleName}: ${t.message ?: ""}".take(120)
+        }
 
         provideContent {
             GlanceTheme {
@@ -49,7 +56,9 @@ class MonthAgendaWidget : GlanceAppWidget() {
                 ) {
                     MonthNavHeader(month)
                     Spacer(GlanceModifier.height(4.dp))
-                    if (!configured) {
+                    if (errorMsg != null) {
+                        Text("加载出错:$errorMsg", style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
+                    } else if (!configured) {
                         Text("尚未选择 Vault", style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 13.sp))
                     } else {
                         MonthGridView(month, cells, selected) { date -> SelectDayAction.params(date).let {

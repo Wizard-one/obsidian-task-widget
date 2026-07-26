@@ -41,7 +41,13 @@ class MonthMiniWidget : GlanceAppWidget() {
         val offset = CalendarWidgetState.monthOffset(context, appWidgetId)
         val month = YearMonth.now().plusMonths(offset.toLong())
         val configured = VaultRepository.getVaultUri(context) != null
-        val cells = CalendarData.monthGrid(context, month)
+        var errorMsg: String? = null
+        val cells = try {
+            CalendarData.monthGrid(context, month)
+        } catch (t: Throwable) {
+            errorMsg = "${t.javaClass.simpleName}: ${t.message ?: ""}".take(120)
+            emptyList()
+        }
         provideContent {
             GlanceTheme {
                 Column(
@@ -50,7 +56,9 @@ class MonthMiniWidget : GlanceAppWidget() {
                 ) {
                     MonthNavHeader(month)
                     Spacer(GlanceModifier.height(4.dp))
-                    if (!configured) {
+                    if (errorMsg != null) {
+                        Text("加载出错:$errorMsg", style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
+                    } else if (!configured) {
                         Text("尚未选择 Vault", style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 13.sp))
                     } else {
                         MonthGridView(month, cells, selected = null, dayAction = null)

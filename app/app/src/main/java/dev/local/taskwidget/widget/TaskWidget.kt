@@ -60,10 +60,17 @@ class TaskWidget : GlanceAppWidget() {
         }
         val filter = WidgetFilterStore.load(context, appWidgetId)
         val configured = VaultRepository.getVaultUri(context) != null
-        val tasks = filter.apply(VaultRepository.loadTasks(context))
+        // 捕获数据阶段异常,把真实错误显示在 widget 上而不是让系统吞成 "Can't show content"
+        var errorMsg: String? = null
+        val tasks = try {
+            filter.apply(VaultRepository.loadTasks(context))
+        } catch (t: Throwable) {
+            errorMsg = "${t.javaClass.simpleName}: ${t.message ?: ""}".take(140)
+            emptyList()
+        }
         provideContent {
             GlanceTheme {
-                WidgetContent(configured, tasks, filter, appWidgetId)
+                WidgetContent(configured, tasks, filter, appWidgetId, errorMsg)
             }
         }
     }
@@ -75,6 +82,7 @@ private fun WidgetContent(
     tasks: List<TaskItem>,
     filter: WidgetFilter,
     appWidgetId: Int,
+    errorMsg: String?,
 ) {
     Column(
         modifier = GlanceModifier
@@ -85,6 +93,7 @@ private fun WidgetContent(
         Header(filter.title, tasks.size, appWidgetId)
         Spacer(GlanceModifier.height(4.dp))
         when {
+            errorMsg != null -> CenterHint("加载出错:\n$errorMsg\n点此打开 App")
             !configured -> CenterHint("尚未选择 Vault\n点击这里去设置")
             tasks.isEmpty() -> CenterHint("🎉 没有待办任务")
             else -> TaskList(tasks.take(WIDGET_MAX_ITEMS), tasks.size)

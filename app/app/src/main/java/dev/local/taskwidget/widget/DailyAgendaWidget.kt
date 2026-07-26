@@ -45,12 +45,17 @@ class DailyAgendaWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val configured = VaultRepository.getVaultUri(context) != null
-        val groups = CalendarData.agenda(context, days = 7)
-        val entries = buildList {
-            for ((date, tasks) in groups) {
-                add(Entry.Head(date))
-                tasks.forEach { add(Entry.Task(it)) }
+        var errorMsg: String? = null
+        val entries = try {
+            buildList {
+                for ((date, tasks) in CalendarData.agenda(context, days = 7)) {
+                    add(Entry.Head(date))
+                    tasks.forEach { add(Entry.Task(it)) }
+                }
             }
+        } catch (t: Throwable) {
+            errorMsg = "${t.javaClass.simpleName}: ${t.message ?: ""}".take(120)
+            emptyList()
         }
         provideContent {
             GlanceTheme {
@@ -72,6 +77,7 @@ class DailyAgendaWidget : GlanceAppWidget() {
                     }
                     Spacer(GlanceModifier.height(6.dp))
                     when {
+                        errorMsg != null -> Centered("加载出错:$errorMsg")
                         !configured -> Centered("尚未选择 Vault")
                         entries.isEmpty() -> Centered("🎉 未来 7 天没有到期任务")
                         else -> LazyColumn(modifier = GlanceModifier.fillMaxSize()) {

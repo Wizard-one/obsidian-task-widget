@@ -38,7 +38,13 @@ import dev.local.taskwidget.data.VaultRepository
 class UpNextWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val configured = VaultRepository.getVaultUri(context) != null
-        val tasks = CalendarData.upcoming(context, limit = 20)
+        var errorMsg: String? = null
+        val tasks = try {
+            CalendarData.upcoming(context, limit = 20)
+        } catch (t: Throwable) {
+            errorMsg = "${t.javaClass.simpleName}: ${t.message ?: ""}".take(120)
+            emptyList()
+        }
         provideContent {
             GlanceTheme {
                 Column(
@@ -59,6 +65,7 @@ class UpNextWidget : GlanceAppWidget() {
                     }
                     Spacer(GlanceModifier.height(6.dp))
                     when {
+                        errorMsg != null -> Hint("加载出错:$errorMsg")
                         !configured -> Hint("尚未选择 Vault")
                         tasks.isEmpty() -> Hint("🎉 没有待办任务")
                         else -> LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
