@@ -85,7 +85,7 @@ class DailyAgendaWidget : GlanceAppWidget() {
                                 entries.take(WIDGET_MAX_ITEMS),
                                 itemId = { e ->
                                     when (e) {
-                                        is Entry.Head -> (e.date?.toEpochDay() ?: -100L)
+                                        is Entry.Head -> (e.date?.toEpochDay() ?: (Long.MAX_VALUE - 1))
                                         is Entry.Task -> taskId(e.item)
                                     }
                                 }

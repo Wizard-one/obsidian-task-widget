@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
@@ -187,7 +188,7 @@ private fun TaskList(tasks: List<TaskItem>, total: Int) {
             TaskRow(task)
         }
         if (total > tasks.size) {
-            item(itemId = -999L) {
+            item(itemId = Long.MAX_VALUE) {
                 Text(
                     text = "还有 ${total - tasks.size} 条,点标题在 App 中查看",
                     style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp),
@@ -212,11 +213,13 @@ private fun TaskRow(task: TaskItem) {
             .padding(vertical = 1.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        CheckBox(
-            checked = false,
-            onCheckedChange = actionRunCallback<CompleteTaskAction>(
-                CompleteTaskAction.params(task)
-            )
+        // 用可点击方框图标代替 Glance CheckBox(复合按钮在列表项里会致整块 "Can't show content")
+        Image(
+            provider = ImageProvider(R.drawable.ic_check_box_outline),
+            contentDescription = "完成",
+            colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
+            modifier = GlanceModifier.size(22.dp).padding(end = 6.dp)
+                .clickable(actionRunCallback<CompleteTaskAction>(CompleteTaskAction.params(task)))
         )
         Column(
             modifier = GlanceModifier
