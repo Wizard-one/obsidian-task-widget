@@ -8,6 +8,7 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.updateAll
+import dev.local.taskwidget.data.CompletionShade
 import dev.local.taskwidget.data.TaskItem
 import dev.local.taskwidget.data.VaultRepository
 import dev.local.taskwidget.work.BadgeUpdater
@@ -31,14 +32,22 @@ class CompleteTaskAction : ActionCallback {
         val fileUri = parameters[KEY_FILE_URI] ?: return
         val rawLine = parameters[KEY_RAW_LINE] ?: return
 
+        // 1) 乐观隐藏:先把这条标记为隐藏并立刻刷新,行瞬间消失(不等文件 IO)
+        val shadeId = CompletionShade.idOf(fileUri, rawLine)
+        CompletionShade.add(context, shadeId)
+        updateAllWidgets(context)
+
+        // 2) 后台真正写回文件 + 更新缓存(慢操作移出反馈关键路径)
         val ok = VaultRepository.completeTask(context, fileUri, rawLine)
         if (!ok) {
-            // 找不到原行:只增量重解析这一个文件(不做整库慢扫描),让 widget 立即回到真实状态
             VaultRepository.noteFileChanged(context, Uri.parse(fileUri))
             withContext(Dispatchers.Main) {
                 Toast.makeText(context, "该任务已变化,已刷新", Toast.LENGTH_SHORT).show()
             }
         }
+
+        // 3) 清除隐藏标记并二次刷新对账(此时缓存已不含该任务,行保持消失)
+        CompletionShade.remove(context, shadeId)
         updateAllWidgets(context)
     }
 

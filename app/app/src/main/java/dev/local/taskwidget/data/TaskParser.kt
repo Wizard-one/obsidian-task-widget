@@ -278,4 +278,23 @@ object TaskParser {
         newDue: LocalDate?,
         newPriority: Priority,
     ): String? = replaceLineInContent(content, rawLine) { editLine(it, newText, newDue, newPriority) }
+
+    /**
+     * 从文件内容中删除与 [rawLine] 完全一致的整行(保留其余行与行尾风格)。
+     * 找不到该行时返回 null。
+     */
+    fun removeLineInContent(content: String, rawLine: String): String? {
+        val lines = content.split("\n")
+        var removed = false
+        val out = ArrayList<String>(lines.size)
+        for (line in lines) {
+            val bare = line.trimEnd('\r')
+            if (!removed && bare == rawLine) {
+                removed = true
+                continue
+            }
+            out.add(line)
+        }
+        return if (removed) out.joinToString("\n") else null
+    }
 }

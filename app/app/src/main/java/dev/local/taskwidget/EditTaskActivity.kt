@@ -1,5 +1,6 @@
 package dev.local.taskwidget
 
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -14,7 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -119,6 +122,7 @@ class EditTaskActivity : ComponentActivity() {
         var priority by remember { mutableStateOf(initialPriority) }
         var showDatePicker by remember { mutableStateOf(false) }
         var saving by remember { mutableStateOf(false) }
+        var confirmingDelete by remember { mutableStateOf(false) }
 
         Column(
             modifier = Modifier
@@ -185,12 +189,12 @@ class EditTaskActivity : ComponentActivity() {
                                 text.trim(), due, priority
                             )
                             if (!ok) {
+                                VaultRepository.noteFileChanged(this@EditTaskActivity, Uri.parse(fileUri))
                                 Toast.makeText(
                                     this@EditTaskActivity,
-                                    "保存失败:文件可能已被修改,正在重新扫描",
+                                    "该任务已变化,已刷新",
                                     Toast.LENGTH_SHORT
                                 ).show()
-                                VaultRepository.scan(this@EditTaskActivity)
                             }
                             updateAllWidgets(this@EditTaskActivity)
                             finish()
@@ -205,6 +209,40 @@ class EditTaskActivity : ComponentActivity() {
                     Text("取消")
                 }
             }
+
+            OutlinedButton(
+                onClick = { confirmingDelete = true },
+                enabled = !saving,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("删除任务")
+            }
+        }
+
+        if (confirmingDelete) {
+            AlertDialog(
+                onDismissRequest = { confirmingDelete = false },
+                title = { Text("删除任务") },
+                text = { Text("将从 markdown 文件中删除这一行,无法撤销。确定?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        confirmingDelete = false
+                        if (saving) return@TextButton
+                        saving = true
+                        scope.launch {
+                            val ok = VaultRepository.deleteTask(this@EditTaskActivity, fileUri, rawLine)
+                            if (!ok) {
+                                VaultRepository.noteFileChanged(this@EditTaskActivity, Uri.parse(fileUri))
+                                Toast.makeText(this@EditTaskActivity, "该任务已变化,已刷新", Toast.LENGTH_SHORT).show()
+                            }
+                            updateAllWidgets(this@EditTaskActivity)
+                            finish()
+                        }
+                    }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = { TextButton(onClick = { confirmingDelete = false }) { Text("取消") } }
+            )
         }
 
         if (showDatePicker) {

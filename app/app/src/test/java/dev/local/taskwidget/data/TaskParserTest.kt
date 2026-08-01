@@ -163,6 +163,32 @@ class TaskParserTest {
     }
 
     @Test
+    fun `remove line deletes only matching line`() {
+        val content = "# 标题\n- [ ] 甲\n- [ ] 乙\n- [ ] 丙\n"
+        val result = TaskParser.removeLineInContent(content, "- [ ] 乙")!!
+        assertEquals("# 标题\n- [ ] 甲\n- [ ] 丙\n", result)
+    }
+
+    @Test
+    fun `remove line preserves crlf and other lines`() {
+        val content = "- [ ] 甲\r\n- [ ] 乙\r\n"
+        val result = TaskParser.removeLineInContent(content, "- [ ] 甲")!!
+        assertEquals("- [ ] 乙\r\n", result)
+    }
+
+    @Test
+    fun `remove line removes only first occurrence`() {
+        val content = "- [ ] x\n- [ ] x\n"
+        val result = TaskParser.removeLineInContent(content, "- [ ] x")!!
+        assertEquals("- [ ] x\n", result)
+    }
+
+    @Test
+    fun `remove line returns null when not found`() {
+        assertNull(TaskParser.removeLineInContent("- [ ] 甲", "- [ ] 不存在"))
+    }
+
+    @Test
     fun `parse file returns only open tasks`() {
         val tasks = TaskParser.parseFile("# 笔记\n- [ ] 甲\n- [x] 乙 ✅ 2026-07-01\n- [ ] 丙 📅 2026-07-12\n- [-] 丁\n文字\n")
         assertEquals(listOf("甲", "丙"), tasks.map { it.text })

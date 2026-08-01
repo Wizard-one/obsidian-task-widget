@@ -5,8 +5,10 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,6 +37,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -59,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import dev.local.taskwidget.data.ObsidianLink
 import dev.local.taskwidget.data.Priority
 import dev.local.taskwidget.data.TaskItem
 import dev.local.taskwidget.data.VaultRepository
@@ -134,6 +139,12 @@ class TaskListActivity : ComponentActivity() {
                 reload(); updateAllWidgets(this@TaskListActivity)
             }
         }
+        fun delete(task: TaskItem) {
+            scope.launch {
+                VaultRepository.deleteTask(this@TaskListActivity, task.fileUri, task.rawLine)
+                reload(); updateAllWidgets(this@TaskListActivity)
+            }
+        }
         fun edit(task: TaskItem) {
             startActivity(
                 Intent(this, EditTaskActivity::class.java)
@@ -141,6 +152,7 @@ class TaskListActivity : ComponentActivity() {
                     .putExtra(EditTaskActivity.EXTRA_RAW_LINE, task.rawLine)
             )
         }
+        var actionTask by remember { mutableStateOf<TaskItem?>(null) }
 
         Scaffold(
             topBar = {
@@ -181,12 +193,36 @@ class TaskListActivity : ComponentActivity() {
                         }
                     }
                 }
+                val onLong: (TaskItem) -> Unit = { actionTask = it }
                 when (view) {
-                    ViewMode.LIST -> ListView(tasks, query, { query = it }, sort, searchFocus, ::complete, ::edit)
-                    ViewMode.KANBAN -> KanbanView(tasks, sort, ::complete, ::edit)
-                    ViewMode.CALENDAR -> CalendarView(tasks, ::complete, ::edit)
+                    ViewMode.LIST -> ListView(tasks, query, { query = it }, sort, searchFocus, ::complete, ::edit, onLong)
+                    ViewMode.KANBAN -> KanbanView(tasks, sort, ::complete, ::edit, onLong)
+                    ViewMode.CALENDAR -> CalendarView(tasks, ::complete, ::edit, onLong)
                 }
             }
+        }
+
+        actionTask?.let { t ->
+            AlertDialog(
+                onDismissRequest = { actionTask = null },
+                title = { Text(t.text, maxLines = 2) },
+                text = { Text("选择对该任务的操作") },
+                confirmButton = {
+                    TextButton(onClick = { delete(t); actionTask = null }) {
+                        Text("删除", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    Row {
+                        if (t.path.isNotBlank()) {
+                            TextButton(onClick = { ObsidianLink.open(this@TaskListActivity, t.path); actionTask = null }) {
+                                Text("在 Obsidian 打开")
+                            }
+                        }
+                        TextButton(onClick = { actionTask = null }) { Text("取消") }
+                    }
+                }
+            )
         }
     }
 
@@ -201,6 +237,7 @@ class TaskListActivity : ComponentActivity() {
         searchFocus: FocusRequester,
         onComplete: (TaskItem) -> Unit,
         onEdit: (TaskItem) -> Unit,
+        onLong: (TaskItem) -> Unit,
     ) {
         val filtered = tasks.filter {
             query.isBlank() || it.text.contains(query, true) ||
@@ -222,7 +259,7 @@ class TaskListActivity : ComponentActivity() {
                 grouped.forEach { (header, items) ->
                     item(key = "h_$header") { GroupHeader(header, items.size) }
                     items(items, key = { it.fileUri + it.rawLine }) { task ->
-                        TaskRow(task, { onComplete(task) }, { onEdit(task) })
+                        TaskRow(task, { onComplete(task) }, { onEdit(task) }, { onLong(task) })
                         HorizontalDivider()
                     }
                 }
@@ -232,8 +269,9 @@ class TaskListActivity : ComponentActivity() {
 
     // ---------------- 看板视图 ----------------
 
+    @OptIn(ExperimentalFoundationApi::class)
     @Composable
-    private fun KanbanView(tasks: List<TaskItem>, sort: SortMode, onComplete: (TaskItem) -> Unit, onEdit: (TaskItem) -> Unit) {
+    private fun KanbanView(tasks: List<TaskItem>, sort: SortMode, onComplete: (TaskItem) -> Unit, onEdit: (TaskItem) -> Unit, onLong: (TaskItem) -> Unit) {
         val sorted = when (sort) {
             SortMode.DUE -> tasks.sortedWith(compareBy({ it.due ?: LocalDate.MAX }, { it.priorityOrder }))
             SortMode.PRIORITY -> tasks.sortedWith(compareBy({ it.priorityOrder }, { it.due ?: LocalDate.MAX }))
@@ -253,7 +291,8 @@ class TaskListActivity : ComponentActivity() {
                     )
                     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                         items.forEach { task ->
-                            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onEdit(task) }) {
+                            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                .combinedClickable(onClick = { onEdit(task) }, onLongClick = { onLong(task) })) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(end = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -275,7 +314,7 @@ class TaskListActivity : ComponentActivity() {
     // ---------------- 日历视图 ----------------
 
     @Composable
-    private fun CalendarView(tasks: List<TaskItem>, onComplete: (TaskItem) -> Unit, onEdit: (TaskItem) -> Unit) {
+    private fun CalendarView(tasks: List<TaskItem>, onComplete: (TaskItem) -> Unit, onEdit: (TaskItem) -> Unit, onLong: (TaskItem) -> Unit) {
         var month by remember { mutableStateOf(YearMonth.now()) }
         var selected by remember { mutableStateOf(LocalDate.now()) }
         val today = LocalDate.now()
@@ -338,7 +377,7 @@ class TaskListActivity : ComponentActivity() {
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(dayTasks, key = { it.fileUri + it.rawLine }) { task ->
-                        TaskRow(task, { onComplete(task) }, { onEdit(task) })
+                        TaskRow(task, { onComplete(task) }, { onEdit(task) }, { onLong(task) })
                         HorizontalDivider()
                     }
                 }
@@ -358,10 +397,13 @@ class TaskListActivity : ComponentActivity() {
         )
     }
 
+    @OptIn(ExperimentalFoundationApi::class)
     @Composable
-    private fun TaskRow(task: TaskItem, onComplete: () -> Unit, onEdit: () -> Unit) {
+    private fun TaskRow(task: TaskItem, onComplete: () -> Unit, onEdit: () -> Unit, onLong: () -> Unit) {
         Row(
-            modifier = Modifier.fillMaxWidth().clickable { onEdit() }.padding(end = 12.dp),
+            modifier = Modifier.fillMaxWidth()
+                .combinedClickable(onClick = { onEdit() }, onLongClick = { onLong() })
+                .padding(end = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Checkbox(checked = false, onCheckedChange = { onComplete() })

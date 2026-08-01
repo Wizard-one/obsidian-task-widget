@@ -1,6 +1,3 @@
 - 创建 CLAUDE.md 
 - 添加一个行为, 每次更改完成创建一个任务列表让用户知道该测试什么
-- 可能用一下loop/goal 对齐当前app 与 task forge 的行为
-- 快速添加任务也应该有完成日期 开始日期这种选项，行为可以是obsidian tasks那种inline提示，也可以是调用taskforge那种
-- 核心是添加任务的逻辑需要修改，当前添加任务并不会直接刷新app中缓存，即添加任务之后需要刷新才会出现在任务总览当中
-- Widget 出现 can't show content
+- 让Claude 自己测试
