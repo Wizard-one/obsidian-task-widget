@@ -129,11 +129,22 @@ private fun Header(title: String, count: Int, appWidgetId: Int) {
             style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp)
         )
         Spacer(GlanceModifier.defaultWeight())
+        // 打开 App(浏览全部任务)
+        val openAppIntent = Intent(context, dev.local.taskwidget.TaskListActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        Image(
+            provider = ImageProvider(R.drawable.ic_open_app),
+            contentDescription = "打开 App",
+            colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
+            modifier = GlanceModifier.size(18.dp).clickable(actionStartActivityIntent(openAppIntent))
+        )
+        Spacer(GlanceModifier.width(12.dp))
         val addIntent = Intent(context, dev.local.taskwidget.QuickAddActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         Image(
             provider = ImageProvider(R.drawable.ic_add),
             contentDescription = "快速添加",
+            colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
             modifier = GlanceModifier
                 .size(18.dp)
                 .clickable(actionStartActivityIntent(addIntent))
@@ -146,18 +157,21 @@ private fun Header(title: String, count: Int, appWidgetId: Int) {
             Image(
                 provider = ImageProvider(R.drawable.ic_settings),
                 contentDescription = "筛选设置",
+                colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
                 modifier = GlanceModifier
                     .size(18.dp)
                     .clickable(actionStartActivityIntent(configIntent))
             )
             Spacer(GlanceModifier.width(12.dp))
         }
+        // 刷新:走中转 Activity 而非后台回调(避免国产 ROM 拦截后台广播)
         Image(
             provider = ImageProvider(R.drawable.ic_refresh),
             contentDescription = "刷新",
+            colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
             modifier = GlanceModifier
                 .size(18.dp)
-                .clickable(actionRunCallback<RefreshAction>())
+                .clickable(actionStartActivityIntent(dev.local.taskwidget.WidgetActionActivity.refreshIntent(context)))
         )
     }
 }
@@ -213,13 +227,16 @@ private fun TaskRow(task: TaskItem) {
             .padding(vertical = 1.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 用可点击方框图标代替 Glance CheckBox(复合按钮在列表项里会致整块 "Can't show content")
+        // 用可点击方框图标代替 Glance CheckBox(复合按钮在列表项里会致整块 "Can't show content");
+        // 点击走中转 Activity 完成(避免国产 ROM 拦截后台广播导致点击无效)
         Image(
             provider = ImageProvider(R.drawable.ic_check_box_outline),
             contentDescription = "完成",
             colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
             modifier = GlanceModifier.size(22.dp).padding(end = 6.dp)
-                .clickable(actionRunCallback<CompleteTaskAction>(CompleteTaskAction.params(task)))
+                .clickable(actionStartActivityIntent(
+                    dev.local.taskwidget.WidgetActionActivity.completeIntent(context, task.fileUri, task.rawLine)
+                ))
         )
         Column(
             modifier = GlanceModifier

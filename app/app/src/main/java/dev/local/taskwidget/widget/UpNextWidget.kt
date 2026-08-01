@@ -46,6 +46,7 @@ class UpNextWidget : GlanceAppWidget() {
             emptyList()
         }
         provideContent {
+            val ctx = androidx.glance.LocalContext.current
             GlanceTheme {
                 Column(
                     modifier = GlanceModifier.fillMaxSize()
@@ -60,7 +61,11 @@ class UpNextWidget : GlanceAppWidget() {
                         Image(
                             provider = ImageProvider(R.drawable.ic_refresh),
                             contentDescription = "刷新",
-                            modifier = GlanceModifier.size(20.dp).clickable(actionRunCallback<RefreshAction>())
+                            modifier = GlanceModifier.size(20.dp).clickable(
+                                androidx.glance.appwidget.action.actionStartActivity(
+                                    dev.local.taskwidget.WidgetActionActivity.refreshIntent(ctx)
+                                )
+                            )
                         )
                     }
                     Spacer(GlanceModifier.height(6.dp))

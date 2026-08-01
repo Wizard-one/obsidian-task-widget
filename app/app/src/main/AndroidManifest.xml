@@ -39,6 +39,13 @@
             android:name=".TaskListActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".WidgetActionActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true" />
+
         <!-- 快速添加:对话框主题,承接磁贴 / 分享 / 选词 -->
         <activity
             android:name=".QuickAddActivity"
