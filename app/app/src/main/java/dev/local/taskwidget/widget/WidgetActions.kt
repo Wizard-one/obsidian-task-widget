@@ -1,6 +1,9 @@
 package dev.local.taskwidget.widget
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.glance.GlanceId
@@ -17,12 +20,36 @@ import kotlinx.coroutines.withContext
 
 /** 刷新所有类型的 widget(任务清单 + 4 种日历类)并更新桌面角标 */
 suspend fun updateAllWidgets(context: Context) {
+    // 路径一:Glance 自带 updateAll
     TaskWidget().updateAll(context)
     UpNextWidget().updateAll(context)
     DailyAgendaWidget().updateAll(context)
     MonthMiniWidget().updateAll(context)
     MonthAgendaWidget().updateAll(context)
+    // 路径二:直接发系统 APPWIDGET_UPDATE 广播给各 receiver(强制走 onUpdate → Glance 重组)。
+    // 部分启动器上 Glance updateAll 不触发重绘,此路径作为兜底。
+    broadcastUpdate(context, TaskWidgetReceiver::class.java)
+    broadcastUpdate(context, UpNextWidgetReceiver::class.java)
+    broadcastUpdate(context, DailyAgendaWidgetReceiver::class.java)
+    broadcastUpdate(context, MonthMiniWidgetReceiver::class.java)
+    broadcastUpdate(context, MonthAgendaWidgetReceiver::class.java)
     BadgeUpdater.update(context)
+}
+
+private fun broadcastUpdate(context: Context, receiver: Class<*>) {
+    try {
+        val component = ComponentName(context, receiver)
+        val ids = AppWidgetManager.getInstance(context).getAppWidgetIds(component)
+        if (ids.isNotEmpty()) {
+            context.sendBroadcast(
+                Intent(context, receiver)
+                    .setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+            )
+        }
+    } catch (_: Exception) {
+        // 忽略:兜底路径,失败不影响主流程
+    }
 }
 
 /** 勾选复选框:写回 markdown 文件并刷新 widget */
