@@ -136,9 +136,9 @@ private fun Header(title: String, count: Int, appWidgetId: Int) {
             provider = ImageProvider(R.drawable.ic_open_app),
             contentDescription = "打开 App",
             colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
-            modifier = GlanceModifier.size(18.dp).clickable(actionStartActivityIntent(openAppIntent))
+            modifier = GlanceModifier.size(22.dp).clickable(actionStartActivityIntent(openAppIntent))
         )
-        Spacer(GlanceModifier.width(12.dp))
+        Spacer(GlanceModifier.width(16.dp))
         val addIntent = Intent(context, dev.local.taskwidget.QuickAddActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         Image(
@@ -146,10 +146,10 @@ private fun Header(title: String, count: Int, appWidgetId: Int) {
             contentDescription = "快速添加",
             colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
             modifier = GlanceModifier
-                .size(18.dp)
+                .size(22.dp)
                 .clickable(actionStartActivityIntent(addIntent))
         )
-        Spacer(GlanceModifier.width(12.dp))
+        Spacer(GlanceModifier.width(16.dp))
         if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
             val configIntent = Intent(context, WidgetConfigActivity::class.java)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
@@ -159,10 +159,10 @@ private fun Header(title: String, count: Int, appWidgetId: Int) {
                 contentDescription = "筛选设置",
                 colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
                 modifier = GlanceModifier
-                    .size(18.dp)
+                    .size(22.dp)
                     .clickable(actionStartActivityIntent(configIntent))
             )
-            Spacer(GlanceModifier.width(12.dp))
+            Spacer(GlanceModifier.width(16.dp))
         }
         // 刷新:走中转 Activity 而非后台回调(避免国产 ROM 拦截后台广播)
         Image(
@@ -170,7 +170,7 @@ private fun Header(title: String, count: Int, appWidgetId: Int) {
             contentDescription = "刷新",
             colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
             modifier = GlanceModifier
-                .size(18.dp)
+                .size(22.dp)
                 .clickable(actionStartActivityIntent(dev.local.taskwidget.WidgetActionActivity.refreshIntent(context)))
         )
     }
@@ -222,25 +222,28 @@ private fun TaskRow(task: TaskItem) {
         .setData(Uri.parse("taskwidget://edit/${task.fileUri.hashCode()}/${task.rawLine.hashCode()}"))
 
     Row(
-        modifier = GlanceModifier
-            .fillMaxWidth()
-            .padding(vertical = 1.dp),
+        modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 用可点击方框图标代替 Glance CheckBox(复合按钮在列表项里会致整块 "Can't show content");
-        // 点击走中转 Activity 完成(避免国产 ROM 拦截后台广播导致点击无效)
-        Image(
-            provider = ImageProvider(R.drawable.ic_check_box_outline),
-            contentDescription = "完成",
-            colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
-            modifier = GlanceModifier.size(22.dp).padding(end = 6.dp)
+        // 左侧一整条"完成"区(加大点击区域,避免误触到编辑);点击走中转 Activity 完成
+        Box(
+            modifier = GlanceModifier.width(48.dp).padding(vertical = 10.dp)
                 .clickable(actionStartActivityIntent(
                     dev.local.taskwidget.WidgetActionActivity.completeIntent(context, task.fileUri, task.rawLine)
-                ))
-        )
+                )),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                provider = ImageProvider(R.drawable.ic_check_box_outline),
+                contentDescription = "完成",
+                colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
+                modifier = GlanceModifier.size(24.dp)
+            )
+        }
         Column(
             modifier = GlanceModifier
                 .defaultWeight()
+                .padding(vertical = 8.dp)
                 .clickable(actionStartActivityIntent(editIntent))
         ) {
             Text(
