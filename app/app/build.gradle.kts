@@ -12,8 +12,8 @@ android {
         applicationId = "dev.local.taskwidget"
         minSdk = 26
         targetSdk = 35
-        versionCode = 16
-        versionName = "1.9.7"
+        versionCode = 17
+        versionName = "1.9.8"
     }
 
     signingConfigs {

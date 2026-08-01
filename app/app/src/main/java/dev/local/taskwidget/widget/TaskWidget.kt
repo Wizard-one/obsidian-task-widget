@@ -69,9 +69,11 @@ class TaskWidget : GlanceAppWidget() {
             errorMsg = "${t.javaClass.simpleName}: ${t.message ?: ""}".take(140)
             emptyList()
         }
+        val renderedAt = java.time.LocalTime.now()
+            .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
         provideContent {
             GlanceTheme {
-                WidgetContent(configured, tasks, filter, appWidgetId, errorMsg)
+                WidgetContent(configured, tasks, filter, appWidgetId, errorMsg, renderedAt)
             }
         }
     }
@@ -84,6 +86,7 @@ private fun WidgetContent(
     filter: WidgetFilter,
     appWidgetId: Int,
     errorMsg: String?,
+    renderedAt: String,
 ) {
     Column(
         modifier = GlanceModifier
@@ -91,7 +94,7 @@ private fun WidgetContent(
             .background(GlanceTheme.colors.widgetBackground)
             .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
-        Header(filter.title, tasks.size, appWidgetId)
+        Header(filter.title, tasks.size, appWidgetId, renderedAt)
         Spacer(GlanceModifier.height(4.dp))
         when {
             errorMsg != null -> CenterHint("加载出错:\n$errorMsg\n点此打开 App")
@@ -109,7 +112,7 @@ private fun WidgetContent(
 internal const val WIDGET_MAX_ITEMS = 20
 
 @Composable
-private fun Header(title: String, count: Int, appWidgetId: Int) {
+private fun Header(title: String, count: Int, appWidgetId: Int, renderedAt: String) {
     val context = LocalContext.current
     Row(
         modifier = GlanceModifier.fillMaxWidth(),
@@ -125,8 +128,8 @@ private fun Header(title: String, count: Int, appWidgetId: Int) {
             modifier = GlanceModifier.clickable(actionStartActivity<MainActivity>())
         )
         Text(
-            text = "  $count",
-            style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp)
+            text = "  $count · $renderedAt",
+            style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp)
         )
         Spacer(GlanceModifier.defaultWeight())
         // 打开 App(浏览全部任务)
@@ -193,22 +196,20 @@ private fun CenterHint(text: String) {
 
 @Composable
 private fun TaskList(tasks: List<TaskItem>, total: Int) {
-    // 去重确保 itemId 唯一(重复的 itemId 会让 Glance LazyColumn 抛错→"Can't show content")
+    // 用普通 Column 而非 LazyColumn:LazyColumn 底层是 RemoteViews 集合适配器,部分启动器上
+    // updateAll 不会刷新集合内容(表现为"点了完成/刷新,行不变");普通 Column 在重组时整体
+    // 替换 RemoteViews,必然刷新。代价是不滚动,故只显示前若干条,其余在 App 内查看。
     val shown = tasks.distinctBy { taskId(it) }
-    LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-        // 稳定 itemId(基于任务身份)——否则某行完成后被移除,下一行会顶上来复用同一 RemoteView,
-        // 导致复选框的"已勾选"视觉残留在新任务上;有了稳定 id,Glance 按身份重建行,勾选即消失
-        items(shown, itemId = { taskId(it) }) { task ->
+    Column(modifier = GlanceModifier.fillMaxSize()) {
+        for (task in shown) {
             TaskRow(task)
         }
-        if (total > tasks.size) {
-            item(itemId = Long.MAX_VALUE) {
-                Text(
-                    text = "还有 ${total - tasks.size} 条,点标题在 App 中查看",
-                    style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp),
-                    modifier = GlanceModifier.padding(vertical = 4.dp)
-                )
-            }
+        if (total > shown.size) {
+            Text(
+                text = "还有 ${total - shown.size} 条,点标题在 App 中查看",
+                style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp),
+                modifier = GlanceModifier.padding(vertical = 4.dp)
+            )
         }
     }
 }

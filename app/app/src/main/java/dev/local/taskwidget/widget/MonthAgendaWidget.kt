@@ -72,8 +72,8 @@ class MonthAgendaWidget : GlanceAppWidget() {
                         if (dayTasks.isEmpty()) {
                             Text("当天无任务", style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
                         } else {
-                            LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                                items(dayTasks.distinctBy { taskId(it) }, itemId = { taskId(it) }) { AgendaTaskRow(it, showDate = false) }
+                            Column(modifier = GlanceModifier.fillMaxSize()) {
+                                for (t in dayTasks.distinctBy { taskId(it) }) AgendaTaskRow(t, showDate = false)
                             }
                         }
                     }

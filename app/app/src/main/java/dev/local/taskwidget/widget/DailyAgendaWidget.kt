@@ -85,16 +85,9 @@ class DailyAgendaWidget : GlanceAppWidget() {
                         errorMsg != null -> Centered("加载出错:$errorMsg")
                         !configured -> Centered("尚未选择 Vault")
                         entries.isEmpty() -> Centered("🎉 未来 7 天没有到期任务")
-                        else -> LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                            items(
-                                entries.take(WIDGET_MAX_ITEMS),
-                                itemId = { e ->
-                                    when (e) {
-                                        is Entry.Head -> (e.date?.toEpochDay() ?: (Long.MAX_VALUE - 1))
-                                        is Entry.Task -> taskId(e.item)
-                                    }
-                                }
-                            ) { entry ->
+                        // 普通 Column 而非 LazyColumn:后者底层集合适配器在部分启动器上 updateAll 不刷新
+                        else -> Column(modifier = GlanceModifier.fillMaxSize()) {
+                            for (entry in entries.take(WIDGET_MAX_ITEMS)) {
                                 when (entry) {
                                     is Entry.Head -> AgendaHeader(entry.date)
                                     is Entry.Task -> AgendaTaskRow(entry.item, showDate = false)

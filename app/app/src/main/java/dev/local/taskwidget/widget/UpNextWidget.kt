@@ -73,8 +73,9 @@ class UpNextWidget : GlanceAppWidget() {
                         errorMsg != null -> Hint("加载出错:$errorMsg")
                         !configured -> Hint("尚未选择 Vault")
                         tasks.isEmpty() -> Hint("🎉 没有待办任务")
-                        else -> LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                            items(tasks.distinctBy { taskId(it) }, itemId = { taskId(it) }) { AgendaTaskRow(it, showDate = true) }
+                        // 普通 Column 而非 LazyColumn:后者底层集合适配器在部分启动器上 updateAll 不刷新
+                        else -> Column(modifier = GlanceModifier.fillMaxSize()) {
+                            for (t in tasks.distinctBy { taskId(it) }) AgendaTaskRow(t, showDate = true)
                         }
                     }
                 }
