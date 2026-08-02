@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:padding="10dp">
+
+    <!-- 头部:标题 + 计数 + 设置(靠左,远离刷新) + 打开/添加/刷新(靠右) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="任务"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:textColor="@color/widget_text"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/widget_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:textSize="11sp"
+            android:textColor="@color/widget_text_dim" />
+
+        <ImageView
+            android:id="@+id/btn_settings"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:padding="6dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_settings"
+            android:tint="@color/widget_text_dim"
+            android:contentDescription="筛选设置" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <ImageView
+            android:id="@+id/btn_open"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:padding="6dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_open_app"
+            android:tint="@color/widget_text_dim"
+            android:contentDescription="打开 App" />
+
+        <ImageView
+            android:id="@+id/btn_add"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="6dp"
+            android:padding="6dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_add"
+            android:tint="@color/widget_text_dim"
+            android:contentDescription="快速添加" />
+
+        <!-- 刷新:与"添加"拉开较大间距,避免误触 -->
+        <ImageView
+            android:id="@+id/btn_refresh"
+            android:layout_width="38dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="16dp"
+            android:paddingLeft="10dp"
+            android:paddingTop="6dp"
+            android:paddingRight="2dp"
+            android:paddingBottom="6dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_refresh"
+            android:tint="@color/widget_text_dim"
+            android:contentDescription="刷新" />
+    </LinearLayout>
+
+    <!-- 空状态提示 -->
+    <TextView
+        android:id="@+id/empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="18dp"
+        android:gravity="center"
+        android:textSize="14sp"
+        android:textColor="@color/widget_text_dim"
+        android:visibility="gone" />
+
+    <!-- 任务行容器(代码里 addView 填充) -->
+    <LinearLayout
+        android:id="@+id/list_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical" />
+
+</LinearLayout>

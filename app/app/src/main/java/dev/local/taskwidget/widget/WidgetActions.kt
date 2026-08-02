@@ -21,16 +21,14 @@ import kotlinx.coroutines.withContext
 
 /** 刷新所有类型的 widget(任务清单 + 4 种日历类)并更新桌面角标 */
 suspend fun updateAllWidgets(context: Context) {
-    // 路径一:以系统真实 appWidgetId 为准,逐个映射到 glanceId 再 update。
-    // 比 updateAll 更可靠:updateAll 依赖 Glance 内部枚举 glanceId,HyperOS/MIUI 重启后
-    // 这份映射常失效(枚举空/过期),导致"点了没反应";而系统 appWidgetId 始终有效。
-    updateByRealIds(context, TaskWidgetReceiver::class.java, TaskWidget())
+    // 任务清单:传统 RemoteViews,系统级直推(HyperOS 也必刷),不走 Glance
+    TaskWidgetReceiver.renderAll(context)
+    // 日历类仍为 Glance:按系统真实 appWidgetId 映射 glanceId 再 update
     updateByRealIds(context, UpNextWidgetReceiver::class.java, UpNextWidget())
     updateByRealIds(context, DailyAgendaWidgetReceiver::class.java, DailyAgendaWidget())
     updateByRealIds(context, MonthMiniWidgetReceiver::class.java, MonthMiniWidget())
     updateByRealIds(context, MonthAgendaWidgetReceiver::class.java, MonthAgendaWidget())
-    // 路径二:直接发系统 APPWIDGET_UPDATE 广播给各 receiver(强制走 onUpdate → Glance 重组),兜底。
-    broadcastUpdate(context, TaskWidgetReceiver::class.java)
+    // 广播兜底(强制走 onUpdate → Glance 重组)
     broadcastUpdate(context, UpNextWidgetReceiver::class.java)
     broadcastUpdate(context, DailyAgendaWidgetReceiver::class.java)
     broadcastUpdate(context, MonthMiniWidgetReceiver::class.java)

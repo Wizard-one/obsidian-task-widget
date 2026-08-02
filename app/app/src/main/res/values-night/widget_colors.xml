@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色主题下的 widget 配色 -->
+    <color name="widget_bg">#FF1C1C1E</color>
+    <color name="widget_text">#FFECECEC</color>
+    <color name="widget_text_dim">#FFAAAAAA</color>
+    <color name="widget_overdue">#FFFF8A80</color>
+</resources>

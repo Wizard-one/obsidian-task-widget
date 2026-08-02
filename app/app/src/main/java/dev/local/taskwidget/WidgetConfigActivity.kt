@@ -31,10 +31,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.glance.appwidget.GlanceAppWidgetManager
 import dev.local.taskwidget.data.WidgetFilter
 import dev.local.taskwidget.ui.AppTheme
-import dev.local.taskwidget.widget.TaskWidget
 import dev.local.taskwidget.widget.WidgetFilterStore
 import kotlinx.coroutines.launch
 
@@ -155,9 +153,8 @@ class WidgetConfigActivity : ComponentActivity() {
                     )
                     WidgetFilterStore.save(this@WidgetConfigActivity, appWidgetId, filter)
                     scope.launch {
-                        val manager = GlanceAppWidgetManager(this@WidgetConfigActivity)
-                        val glanceId = manager.getGlanceIdBy(appWidgetId)
-                        TaskWidget().update(this@WidgetConfigActivity, glanceId)
+                        dev.local.taskwidget.widget.TaskWidgetReceiver
+                            .renderAll(this@WidgetConfigActivity)
                         setResult(
                             RESULT_OK,
                             Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
