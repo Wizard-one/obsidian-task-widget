@@ -26,7 +26,9 @@ data class WidgetFilter(
         tasks.filter { task ->
             val due = task.due
             val dateOk = when {
-                due == null -> includeUndated
+                // 无日期任务只在"全部"范围下出现(且受 includeUndated 控制);
+                // "今日+已过期"/"本周"是按日期筛的范围,无日期天然不属于任何日期区间,故排除。
+                due == null -> dateScope == SCOPE_ALL && includeUndated
                 dateScope == SCOPE_TODAY -> !due.isAfter(today)
                 dateScope == SCOPE_WEEK -> !due.isAfter(today.plusDays(7))
                 else -> true

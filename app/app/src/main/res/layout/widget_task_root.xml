@@ -6,7 +6,7 @@
     android:background="@drawable/widget_bg"
     android:padding="10dp">
 
-    <!-- 头部:标题 + 计数 + 设置(靠左,远离刷新) + 打开/添加/刷新(靠右) -->
+    <!-- 头部:标题 + 计数 + 打开/添加/刷新 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -25,26 +25,13 @@
 
         <TextView
             android:id="@+id/widget_count"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:paddingStart="6dp"
             android:paddingEnd="6dp"
             android:textSize="11sp"
             android:textColor="@color/widget_text_dim" />
-
-        <ImageView
-            android:id="@+id/btn_settings"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:padding="6dp"
-            android:scaleType="fitCenter"
-            android:contentDescription="筛选设置" />
-
-        <!-- 空白撑开:RemoteViews 不支持裸 <View>,用空 TextView 占位 -->
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1" />
 
         <ImageView
             android:id="@+id/btn_open"
@@ -58,7 +45,7 @@
             android:id="@+id/btn_add"
             android:layout_width="34dp"
             android:layout_height="34dp"
-            android:layout_marginStart="6dp"
+            android:layout_marginStart="8dp"
             android:padding="6dp"
             android:scaleType="fitCenter"
             android:contentDescription="快速添加" />
@@ -66,33 +53,40 @@
         <!-- 刷新:与"添加"拉开较大间距,避免误触 -->
         <ImageView
             android:id="@+id/btn_refresh"
-            android:layout_width="38dp"
+            android:layout_width="40dp"
             android:layout_height="34dp"
             android:layout_marginStart="16dp"
-            android:paddingLeft="10dp"
+            android:paddingLeft="12dp"
             android:paddingTop="6dp"
-            android:paddingRight="2dp"
+            android:paddingRight="4dp"
             android:paddingBottom="6dp"
             android:scaleType="fitCenter"
             android:contentDescription="刷新" />
     </LinearLayout>
 
-    <!-- 空状态提示 -->
-    <TextView
-        android:id="@+id/empty"
+    <!-- 列表区:ListView 可滚动;空时显示 empty -->
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingTop="18dp"
-        android:gravity="center"
-        android:textSize="14sp"
-        android:textColor="@color/widget_text_dim"
-        android:visibility="gone" />
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="4dp">
 
-    <!-- 任务行容器(代码里 addView 填充) -->
-    <LinearLayout
-        android:id="@+id/list_container"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical" />
+        <ListView
+            android:id="@+id/list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@null"
+            android:dividerHeight="0dp" />
+
+        <TextView
+            android:id="@+id/empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:paddingTop="18dp"
+            android:textSize="14sp"
+            android:textColor="@color/widget_text_dim" />
+    </FrameLayout>
 
 </LinearLayout>

@@ -101,6 +101,12 @@
             </intent-filter>
         </receiver>
 
+        <!-- 任务清单 widget 可滚动列表的数据源 -->
+        <service
+            android:name=".widget.TaskWidgetService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="false" />
+
         <receiver
             android:name=".widget.TaskWidgetReceiver"
             android:exported="true"

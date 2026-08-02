@@ -56,6 +56,19 @@ class WidgetActionActivity : ComponentActivity() {
                 }
                 finish()
             }
+            ACTION_EDIT -> {
+                val fileUri = intent.getStringExtra(EXTRA_FILE_URI)
+                val rawLine = intent.getStringExtra(EXTRA_RAW_LINE)
+                if (fileUri != null && rawLine != null) {
+                    startActivity(
+                        Intent(this, EditTaskActivity::class.java)
+                            .putExtra(EditTaskActivity.EXTRA_FILE_URI, fileUri)
+                            .putExtra(EditTaskActivity.EXTRA_RAW_LINE, rawLine)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+                finish()
+            }
             else -> finish()
         }
     }
@@ -69,6 +82,7 @@ class WidgetActionActivity : ComponentActivity() {
         const val EXTRA_RAW_LINE = "rawLine"
         const val ACTION_COMPLETE = "complete"
         const val ACTION_REFRESH = "refresh"
+        const val ACTION_EDIT = "edit"
 
         private suspend fun toast(context: Context, msg: String) = withContext(Dispatchers.Main) {
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()

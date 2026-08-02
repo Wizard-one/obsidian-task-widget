@@ -54,10 +54,19 @@ class WidgetFilterTest {
     }
 
     @Test
-    fun `include undated adds dateless tasks`() {
+    fun `date scope excludes undated even when includeUndated true`() {
+        // 今日+已过期是按日期筛的范围,无日期任务不应出现(即便 includeUndated=true)
         val result = WidgetFilter(dateScope = WidgetFilter.SCOPE_TODAY, includeUndated = true)
             .apply(tasks, today)
-        assertEquals(listOf("过期", "今天", "无日期", "带标签", "工作目录"), result.map { it.text })
+        assertEquals(listOf("过期", "今天"), result.map { it.text })
+    }
+
+    @Test
+    fun `scope all with includeUndated false drops undated`() {
+        // 7 条里有 3 条无日期(无日期/带标签/工作目录),includeUndated=false 应只剩 4 条有日期的
+        val result = WidgetFilter(dateScope = WidgetFilter.SCOPE_ALL, includeUndated = false)
+            .apply(tasks, today)
+        assertEquals(listOf("过期", "今天", "周内", "下月"), result.map { it.text })
     }
 
     @Test
