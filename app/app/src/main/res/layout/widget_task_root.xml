@@ -38,8 +38,6 @@
             android:layout_height="32dp"
             android:padding="6dp"
             android:scaleType="fitCenter"
-            android:src="@drawable/ic_settings"
-            android:tint="@color/widget_text_dim"
             android:contentDescription="筛选设置" />
 
         <View
@@ -53,8 +51,6 @@
             android:layout_height="34dp"
             android:padding="6dp"
             android:scaleType="fitCenter"
-            android:src="@drawable/ic_open_app"
-            android:tint="@color/widget_text_dim"
             android:contentDescription="打开 App" />
 
         <ImageView
@@ -64,8 +60,6 @@
             android:layout_marginStart="6dp"
             android:padding="6dp"
             android:scaleType="fitCenter"
-            android:src="@drawable/ic_add"
-            android:tint="@color/widget_text_dim"
             android:contentDescription="快速添加" />
 
         <!-- 刷新:与"添加"拉开较大间距,避免误触 -->
@@ -79,8 +73,6 @@
             android:paddingRight="2dp"
             android:paddingBottom="6dp"
             android:scaleType="fitCenter"
-            android:src="@drawable/ic_refresh"
-            android:tint="@color/widget_text_dim"
             android:contentDescription="刷新" />
     </LinearLayout>
 

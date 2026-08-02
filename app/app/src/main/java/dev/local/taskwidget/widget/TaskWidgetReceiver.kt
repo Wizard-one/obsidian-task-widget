@@ -6,9 +6,14 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.net.Uri
 import android.view.View
 import android.widget.RemoteViews
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.DrawableCompat
 import dev.local.taskwidget.EditTaskActivity
 import dev.local.taskwidget.QuickAddActivity
 import dev.local.taskwidget.R
@@ -94,9 +99,17 @@ class TaskWidgetReceiver : AppWidgetProvider() {
             val filter = WidgetFilterStore.load(context, appWidgetId)
             val tasks = filter.apply(all).distinctBy { it.fileUri + " " + it.rawLine }
 
+            val iconColor = dimIconColor(context)
             val root = RemoteViews(context.packageName, R.layout.widget_task_root)
             root.setTextViewText(R.id.widget_title, filter.title)
             root.setTextViewText(R.id.widget_count, tasks.size.toString())
+
+            // 图标改为在本进程栅格化成位图再推送:RemoteViews 对 VectorDrawable 的 android:src
+            // 支持不稳(HyperOS 等会报 "can't load widget"),位图必定可跨进程显示。
+            setIcon(root, R.id.btn_settings, context, R.drawable.ic_settings, 22, iconColor)
+            setIcon(root, R.id.btn_open, context, R.drawable.ic_open_app, 22, iconColor)
+            setIcon(root, R.id.btn_add, context, R.drawable.ic_add, 22, iconColor)
+            setIcon(root, R.id.btn_refresh, context, R.drawable.ic_refresh, 22, iconColor)
 
             // 头部按钮(每个用唯一 requestCode,避免 PendingIntent 复用串号)
             val base = appWidgetId * 16
@@ -121,7 +134,7 @@ class TaskWidgetReceiver : AppWidgetProvider() {
                 else -> {
                     root.setViewVisibility(R.id.empty, View.GONE)
                     val shown = tasks.take(WIDGET_MAX_ITEMS)
-                    for (t in shown) root.addView(R.id.list_container, buildRow(context, t))
+                    for (t in shown) root.addView(R.id.list_container, buildRow(context, t, iconColor))
                     if (tasks.size > shown.size) {
                         val more = RemoteViews(context.packageName, R.layout.widget_task_more)
                         more.setTextViewText(R.id.more_text, "还有 ${tasks.size - shown.size} 条,点标题在 App 中查看")
@@ -137,8 +150,9 @@ class TaskWidgetReceiver : AppWidgetProvider() {
             root.setTextViewText(R.id.empty, msg)
         }
 
-        private fun buildRow(context: Context, task: TaskItem): RemoteViews {
+        private fun buildRow(context: Context, task: TaskItem, iconColor: Int): RemoteViews {
             val row = RemoteViews(context.packageName, R.layout.widget_task_row)
+            setIcon(row, R.id.row_check, context, R.drawable.ic_check_box_outline, 24, iconColor)
             row.setTextViewText(R.id.row_text, priorityPrefix(task.priorityOrder) + task.text)
             val due = task.due
             if (due != null) {
@@ -164,6 +178,32 @@ class TaskWidgetReceiver : AppWidgetProvider() {
                     .setData(Uri.parse("taskwidget://edit/${task.fileUri.hashCode()}/${task.rawLine.hashCode()}")))
             )
             return row
+        }
+
+        /** 次要图标色,跟随明暗(与 @color/widget_text_dim 一致) */
+        private fun dimIconColor(context: Context): Int {
+            val night = (context.resources.configuration.uiMode and
+                Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+            return if (night) 0xFFAAAAAA.toInt() else 0xFF666666.toInt()
+        }
+
+        /** 把矢量图标栅格化成位图并设置到 RemoteViews(避开 RemoteViews 对 VectorDrawable 的不稳定支持) */
+        private fun setIcon(views: RemoteViews, viewId: Int, context: Context, resId: Int, sizeDp: Int, color: Int) {
+            iconBitmap(context, resId, sizeDp, color)?.let { views.setImageViewBitmap(viewId, it) }
+        }
+
+        private fun iconBitmap(context: Context, resId: Int, sizeDp: Int, color: Int): Bitmap? = try {
+            val d = ContextCompat.getDrawable(context, resId)?.mutate()
+            if (d == null) null else {
+                val px = (sizeDp * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
+                DrawableCompat.setTint(d, color)
+                d.setBounds(0, 0, px, px)
+                val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+                d.draw(Canvas(bmp))
+                bmp
+            }
+        } catch (_: Exception) {
+            null
         }
 
         private fun act(context: Context, req: Int, cls: Class<*>): PendingIntent =
