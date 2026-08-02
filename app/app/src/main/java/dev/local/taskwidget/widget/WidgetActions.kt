@@ -9,8 +9,9 @@ import android.widget.Toast
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
+import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.action.ActionCallback
-import androidx.glance.appwidget.updateAll
 import dev.local.taskwidget.data.CompletionShade
 import dev.local.taskwidget.data.TaskItem
 import dev.local.taskwidget.data.VaultRepository
@@ -20,20 +21,36 @@ import kotlinx.coroutines.withContext
 
 /** 刷新所有类型的 widget(任务清单 + 4 种日历类)并更新桌面角标 */
 suspend fun updateAllWidgets(context: Context) {
-    // 路径一:Glance 自带 updateAll
-    TaskWidget().updateAll(context)
-    UpNextWidget().updateAll(context)
-    DailyAgendaWidget().updateAll(context)
-    MonthMiniWidget().updateAll(context)
-    MonthAgendaWidget().updateAll(context)
-    // 路径二:直接发系统 APPWIDGET_UPDATE 广播给各 receiver(强制走 onUpdate → Glance 重组)。
-    // 部分启动器上 Glance updateAll 不触发重绘,此路径作为兜底。
+    // 路径一:以系统真实 appWidgetId 为准,逐个映射到 glanceId 再 update。
+    // 比 updateAll 更可靠:updateAll 依赖 Glance 内部枚举 glanceId,HyperOS/MIUI 重启后
+    // 这份映射常失效(枚举空/过期),导致"点了没反应";而系统 appWidgetId 始终有效。
+    updateByRealIds(context, TaskWidgetReceiver::class.java, TaskWidget())
+    updateByRealIds(context, UpNextWidgetReceiver::class.java, UpNextWidget())
+    updateByRealIds(context, DailyAgendaWidgetReceiver::class.java, DailyAgendaWidget())
+    updateByRealIds(context, MonthMiniWidgetReceiver::class.java, MonthMiniWidget())
+    updateByRealIds(context, MonthAgendaWidgetReceiver::class.java, MonthAgendaWidget())
+    // 路径二:直接发系统 APPWIDGET_UPDATE 广播给各 receiver(强制走 onUpdate → Glance 重组),兜底。
     broadcastUpdate(context, TaskWidgetReceiver::class.java)
     broadcastUpdate(context, UpNextWidgetReceiver::class.java)
     broadcastUpdate(context, DailyAgendaWidgetReceiver::class.java)
     broadcastUpdate(context, MonthMiniWidgetReceiver::class.java)
     broadcastUpdate(context, MonthAgendaWidgetReceiver::class.java)
     BadgeUpdater.update(context)
+}
+
+/** 用系统真实 appWidgetId 反查 glanceId 并强制 update,逐个 try/catch 保证互不影响 */
+private suspend fun updateByRealIds(context: Context, receiver: Class<*>, widget: GlanceAppWidget) {
+    try {
+        val mgr = GlanceAppWidgetManager(context)
+        val ids = AppWidgetManager.getInstance(context)
+            .getAppWidgetIds(ComponentName(context, receiver))
+        for (id in ids) {
+            val glanceId = try { mgr.getGlanceIdBy(id) } catch (_: Exception) { null } ?: continue
+            try { widget.update(context, glanceId) } catch (_: Exception) {}
+        }
+    } catch (_: Exception) {
+        // 忽略:兜底路径,失败不影响主流程
+    }
 }
 
 private fun broadcastUpdate(context: Context, receiver: Class<*>) {

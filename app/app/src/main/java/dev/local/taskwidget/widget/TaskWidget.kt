@@ -127,6 +127,21 @@ private fun Header(title: String, count: Int, appWidgetId: Int, renderedAt: Stri
             ),
             modifier = GlanceModifier.clickable(actionStartActivity<MainActivity>())
         )
+        // 筛选设置:放在标题旁(左侧),远离右侧的刷新按钮,避免误触
+        if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+            val configIntent = Intent(context, WidgetConfigActivity::class.java)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                .setData(Uri.parse("taskwidget://config/$appWidgetId"))
+            Spacer(GlanceModifier.width(10.dp))
+            Image(
+                provider = ImageProvider(R.drawable.ic_settings),
+                contentDescription = "筛选设置",
+                colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
+                modifier = GlanceModifier
+                    .size(20.dp)
+                    .clickable(actionStartActivityIntent(configIntent))
+            )
+        }
         Text(
             text = "  $count · $renderedAt",
             style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp)
@@ -152,30 +167,20 @@ private fun Header(title: String, count: Int, appWidgetId: Int, renderedAt: Stri
                 .size(22.dp)
                 .clickable(actionStartActivityIntent(addIntent))
         )
-        Spacer(GlanceModifier.width(16.dp))
-        if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-            val configIntent = Intent(context, WidgetConfigActivity::class.java)
-                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                .setData(Uri.parse("taskwidget://config/$appWidgetId"))
-            Image(
-                provider = ImageProvider(R.drawable.ic_settings),
-                contentDescription = "筛选设置",
-                colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
-                modifier = GlanceModifier
-                    .size(22.dp)
-                    .clickable(actionStartActivityIntent(configIntent))
-            )
-            Spacer(GlanceModifier.width(16.dp))
-        }
-        // 刷新:走中转 Activity 而非后台回调(避免国产 ROM 拦截后台广播)
-        Image(
-            provider = ImageProvider(R.drawable.ic_refresh),
-            contentDescription = "刷新",
-            colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
+        // 刷新:右端独立大点击区(左侧留 padding 隔开 add,避免误触);走中转 Activity 而非后台回调
+        Box(
             modifier = GlanceModifier
-                .size(22.dp)
-                .clickable(actionStartActivityIntent(dev.local.taskwidget.WidgetActionActivity.refreshIntent(context)))
-        )
+                .padding(start = 18.dp, top = 4.dp, bottom = 4.dp)
+                .clickable(actionStartActivityIntent(dev.local.taskwidget.WidgetActionActivity.refreshIntent(context))),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                provider = ImageProvider(R.drawable.ic_refresh),
+                contentDescription = "刷新",
+                colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
+                modifier = GlanceModifier.size(22.dp)
+            )
+        }
     }
 }
 
