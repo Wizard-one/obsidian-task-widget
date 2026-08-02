@@ -40,9 +40,10 @@
             android:scaleType="fitCenter"
             android:contentDescription="筛选设置" />
 
-        <View
+        <!-- 空白撑开:RemoteViews 不支持裸 <View>,用空 TextView 占位 -->
+        <TextView
             android:layout_width="0dp"
-            android:layout_height="1dp"
+            android:layout_height="wrap_content"
             android:layout_weight="1" />
 
         <ImageView
