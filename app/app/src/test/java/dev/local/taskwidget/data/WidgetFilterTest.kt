@@ -11,6 +11,8 @@ class WidgetFilterTest {
     private fun task(
         text: String,
         due: String? = null,
+        start: String? = null,
+        scheduled: String? = null,
         tags: List<String> = emptyList(),
         path: String = "Tasks.md",
     ) = TaskItem(
@@ -19,9 +21,12 @@ class WidgetFilterTest {
         path = path,
         rawLine = "- [ ] $text",
         text = text,
-        dueDate = due,
+        dueDate = due ?: scheduled ?: start,
         priorityOrder = Priority.NONE.order,
         tags = tags,
+        actualDueDate = due,
+        scheduledDate = scheduled,
+        startDate = start,
     )
 
     private val tasks = listOf(
@@ -59,6 +64,23 @@ class WidgetFilterTest {
         val result = WidgetFilter(dateScope = WidgetFilter.SCOPE_TODAY, includeUndated = true)
             .apply(tasks, today)
         assertEquals(listOf("过期", "今天"), result.map { it.text })
+    }
+
+    @Test
+    fun `today scope uses happens on or before`() {
+        val happensTasks = listOf(
+            task("开始于昨天,截止未来", start = "2026-07-10", due = "2026-07-20"),
+            task("开始于明天,截止今天", start = "2026-07-12", due = "2026-07-11"),
+            task("开始和截止都在未来", start = "2026-07-12", due = "2026-07-20"),
+            task("只有计划日为今天", scheduled = "2026-07-11"),
+            task("无日期"),
+        )
+        val result = WidgetFilter(dateScope = WidgetFilter.SCOPE_TODAY, includeUndated = true)
+            .apply(happensTasks, today)
+        assertEquals(
+            listOf("开始于昨天,截止未来", "开始于明天,截止今天"),
+            result.map { it.text }
+        )
     }
 
     @Test
