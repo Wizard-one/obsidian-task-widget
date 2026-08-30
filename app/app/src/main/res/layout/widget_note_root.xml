@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:padding="10dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/note_widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/note_widget_title"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:textColor="@color/widget_text"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/note_widget_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:textSize="11sp"
+            android:textColor="@color/widget_text_dim" />
+
+        <ImageView
+            android:id="@+id/note_btn_refresh"
+            android:layout_width="40dp"
+            android:layout_height="34dp"
+            android:paddingStart="8dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="6dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="@string/note_widget_refresh" />
+
+        <ImageView
+            android:id="@+id/note_btn_add"
+            android:layout_width="40dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="8dp"
+            android:padding="6dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="@string/note_widget_add" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="4dp">
+
+        <ListView
+            android:id="@+id/note_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@null"
+            android:dividerHeight="0dp" />
+
+        <TextView
+            android:id="@+id/note_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:padding="18dp"
+            android:textSize="14sp"
+            android:textColor="@color/widget_text_dim" />
+    </FrameLayout>
+
+</LinearLayout>

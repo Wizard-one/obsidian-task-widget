@@ -1,14 +1,16 @@
 # 任务小组件 (TaskWidget)
 
-一个把 Obsidian vault 待办任务搬到安卓桌面的 App:主屏幕 widget 勾选完成、改动实时写回
-markdown。这是对 [TaskForge](https://taskforge.md/) 的 clean-room 复刻——**复现了除计费
-(RevenueCat)外的全部机制**,但用纯 Kotlin + Jetpack Glance 实现(原版是 Flutter + Rust)。
+一个把 Obsidian vault 待办任务和 Markdown 笔记搬到安卓桌面的 App:主屏幕 widget 勾选完成、
+按文件夹浏览笔记并从模板快速新建,改动直接写回 markdown。任务功能是对
+[TaskForge](https://taskforge.md/) 的 clean-room 复刻——**复现了除计费(RevenueCat)外的全部机制**,
+并额外提供独立的笔记文件夹 widget。
 
 ## 与 TaskForge 的对应
 
 | TaskForge 机制 | 本项目 |
 |---|---|
-| 5 种 widget(任务清单 + 每日议程/月+议程/迷你月历/UpNext) | ✅ 全部 |
+| 5 种任务 widget(任务清单 + 每日议程/月+议程/迷你月历/UpNext) | ✅ 全部 |
+| 独立笔记文件夹 widget + 模板新建 | ✅ 额外提供 |
 | 快速添加(widget/磁贴/分享/选词)+ 自然语言日期 | ✅ |
 | 完整 Obsidian Tasks + Dataview + 循环任务 | ✅ |
 | 快捷设置磁贴(快速添加/搜索) | ✅ |
@@ -21,6 +23,10 @@ markdown。这是对 [TaskForge](https://taskforge.md/) 的 clean-room 复刻—
 ## 功能
 
 - 主屏幕 widget 显示 vault 中未完成任务(`- [ ]`),点复选框直接完成
+- **笔记文件夹 widget(v1.10)**:每个实例通过 SAF 独立选择文件夹,显示当前层全部 `.md` 文件名;
+  右上角可刷新或新建笔记,点击文件优先在 Obsidian 打开,不可用时交给系统 Markdown 应用
+- **笔记模板(v1.10)**:每个笔记 widget 可指定一个默认 `.md` 模板,新建时替换 `{{title}}` 和
+  `{{date}}`;不设模板时写入 `# 标题`,重名自动使用 `(1)`、`(2)` 后缀且绝不覆盖原文件
 - 完成时把 `[ ]` 改成 `[x]` 并追加 `✅ 完成日期`(兼容 Obsidian Tasks 插件格式)
 - 解析 `📅 截止日期`、`🔺⏫🔼🔽⏬ 优先级`、`#标签`;按 过期 → 今天 → 日期 → 无日期 排序,过期标红
 - **筛选(v1.1)**:每个 widget 实例独立配置——标题、日期范围(全部 / 今天+过期 / 7天内+过期)、
@@ -68,4 +74,5 @@ $env:JAVA_HOME = "C:\Program Files\Microsoft\jdk-17.0.19.10-hotspot"
 
 1. 把 APK 传到手机安装(需允许安装未知来源应用)
 2. 打开 App → 选择 Vault 文件夹 → 授权
-3. 长按主屏幕空白处 → 小部件 → 添加"任务清单"
+3. 长按主屏幕空白处 → 小部件 → 添加“任务清单”或“笔记文件夹”
+4. 添加“笔记文件夹”时为该实例选择目标文件夹,并可选一个默认 Markdown 模板

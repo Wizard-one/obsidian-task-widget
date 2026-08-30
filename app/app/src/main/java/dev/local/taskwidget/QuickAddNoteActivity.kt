@@ -1,0 +1,159 @@
+package dev.local.taskwidget
+
+import android.appwidget.AppWidgetManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import dev.local.taskwidget.data.CreateNoteResult
+import dev.local.taskwidget.data.NoteRepository
+import dev.local.taskwidget.ui.AppTheme
+import dev.local.taskwidget.widget.NoteWidgetConfig
+import dev.local.taskwidget.widget.NoteWidgetConfigStore
+import dev.local.taskwidget.widget.NoteWidgetReceiver
+import kotlinx.coroutines.launch
+
+/** 从笔记 widget 右上角快速创建 Markdown 笔记。 */
+class QuickAddNoteActivity : ComponentActivity() {
+
+    private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        appWidgetId = intent?.getIntExtra(
+            AppWidgetManager.EXTRA_APPWIDGET_ID,
+            AppWidgetManager.INVALID_APPWIDGET_ID,
+        ) ?: AppWidgetManager.INVALID_APPWIDGET_ID
+        val config = NoteWidgetConfigStore.load(this, appWidgetId)
+        if (config == null) {
+            Toast.makeText(this, "笔记 Widget 尚未配置", Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
+        setContent {
+            AppTheme { QuickAddNoteDialog(config) }
+        }
+    }
+
+    @Composable
+    private fun QuickAddNoteDialog(config: NoteWidgetConfig) {
+        val scope = rememberCoroutineScope()
+        val focus = remember { FocusRequester() }
+        var name by remember { mutableStateOf("") }
+        var busy by remember { mutableStateOf(false) }
+        var error by remember { mutableStateOf<String?>(null) }
+
+        LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+
+        fun submit() {
+            if (busy || name.isBlank()) return
+            busy = true
+            error = null
+            scope.launch {
+                when (val result = NoteRepository.createNote(
+                    this@QuickAddNoteActivity,
+                    config.folderUri,
+                    config.templateUri,
+                    name,
+                )) {
+                    is CreateNoteResult.Created -> {
+                        NoteWidgetReceiver.renderFolder(this@QuickAddNoteActivity, config.folderUri)
+                        Toast.makeText(
+                            this@QuickAddNoteActivity,
+                            "已创建 ${result.fileName}",
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                        finish()
+                    }
+                    CreateNoteResult.InvalidName -> {
+                        error = "名称不能为空,且不能含 < > : \" / \\ | ? * 等字符"
+                        busy = false
+                    }
+                    CreateNoteResult.FolderUnavailable -> {
+                        error = "无法访问目标文件夹,请重新配置 Widget"
+                        busy = false
+                    }
+                    CreateNoteResult.TemplateUnreadable -> {
+                        error = "无法读取默认模板,请重新配置模板"
+                        busy = false
+                    }
+                    CreateNoteResult.Conflict -> {
+                        error = "同名笔记过多,请换一个名称"
+                        busy = false
+                    }
+                    CreateNoteResult.WriteFailed -> {
+                        error = "创建失败,请检查文件夹写入权限"
+                        busy = false
+                    }
+                }
+            }
+        }
+
+        AlertDialog(
+            onDismissRequest = { if (!busy) finish() },
+            title = { Text("新建笔记") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it; error = null },
+                        label = { Text("笔记名称") },
+                        placeholder = { Text("如:会议记录") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { submit() }),
+                        isError = error != null,
+                    )
+                    Text("保存到:${config.folderName}", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "模板:${config.templateName ?: "无(正文为 # 标题)"}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { submit() }, enabled = name.isNotBlank() && !busy) {
+                    Text(if (busy) "创建中…" else "创建")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { finish() }, enabled = !busy) { Text("取消") }
+            },
+        )
+    }
+
+    companion object {
+        fun intent(context: Context, appWidgetId: Int): Intent =
+            Intent(context, QuickAddNoteActivity::class.java)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                .setData(Uri.parse("taskwidget://notes/add/$appWidgetId"))
+    }
+}

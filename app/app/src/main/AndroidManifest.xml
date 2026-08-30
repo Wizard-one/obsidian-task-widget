@@ -31,6 +31,14 @@
         </activity>
 
         <activity
+            android:name=".NoteWidgetConfigActivity"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name=".EditTaskActivity"
             android:exported="false"
             android:excludeFromRecents="true" />
@@ -45,6 +53,19 @@
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
             android:noHistory="true" />
+
+        <activity
+            android:name=".NoteWidgetActionActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true" />
+
+        <activity
+            android:name=".QuickAddNoteActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.Transparent" />
 
         <!-- 快速添加:对话框主题,承接磁贴 / 分享 / 选词 -->
         <activity
@@ -117,6 +138,24 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/task_widget_info" />
+        </receiver>
+
+        <!-- 笔记文件夹 widget 的可滚动列表与 provider -->
+        <service
+            android:name=".widget.NoteWidgetService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="false" />
+
+        <receiver
+            android:name=".widget.NoteWidgetReceiver"
+            android:exported="true"
+            android:label="@string/note_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/note_widget_info" />
         </receiver>
 
         <receiver

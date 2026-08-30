@@ -139,7 +139,7 @@ class MainActivity : ComponentActivity() {
         ) {
             Text(
                 "在主屏幕 widget 上直接查看、勾选完成 Obsidian vault 里的任务," +
-                    "改动直接写回 markdown 文件(兼容 Obsidian Tasks 插件格式)。",
+                    "也可用独立的笔记 widget 浏览文件夹并从模板快速新建 Markdown 笔记。",
                 style = MaterialTheme.typography.bodyMedium
             )
 
@@ -294,11 +294,12 @@ class MainActivity : ComponentActivity() {
                 ) {
                     Text("使用说明", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "1. 选好 Vault 文件夹后,长按主屏幕空白处 → 小部件,可添加「任务清单」和 4 种日历类 widget;任务清单添加时可设筛选(日期 / #标签 / 路径 / 排除路径)。\n" +
-                            "2. 「浏览全部任务」里可切换 列表 / 看板 / 日历 三视图。\n" +
-                            "3. 点任务文字可编辑内容、截止日期、优先级,并可「在 Obsidian 中打开」;勾选完成写入 ✅ 日期,循环任务(🔁)会自动生成下一次。\n" +
-                            "4. 快速添加支持自然语言日期(如“交房租 明天 ⏫”)。\n" +
-                            "5. 支持语法:📅⏳🛫➕✅❌ 日期、🔺⏫🔼🔽⏬ 优先级、#标签、Dataview 内联字段。",
+                        "1. 选好 Vault 文件夹后,长按主屏幕空白处 → 小部件,可添加「任务清单」、4 种日历类 widget 和「笔记文件夹」;任务清单可设筛选,笔记 widget 可为每个实例独立选择文件夹与默认模板。\n" +
+                            "2. 笔记 widget 只显示所选文件夹当前层的 .md 文件;右上角 ➕ 可按模板新建,支持 {{title}} 和 {{date}}。\n" +
+                            "3. 「浏览全部任务」里可切换 列表 / 看板 / 日历 三视图。\n" +
+                            "4. 点任务文字可编辑内容、截止日期、优先级,并可「在 Obsidian 中打开」;勾选完成写入 ✅ 日期,循环任务(🔁)会自动生成下一次。\n" +
+                            "5. 快速添加支持自然语言日期(如“交房租 明天 ⏫”)。\n" +
+                            "6. 支持语法:📅⏳🛫➕✅❌ 日期、🔺⏫🔼🔽⏬ 优先级、#标签、Dataview 内联字段。",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }

@@ -19,10 +19,11 @@ import dev.local.taskwidget.work.BadgeUpdater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** 刷新所有类型的 widget(任务清单 + 4 种日历类)并更新桌面角标 */
+/** 刷新所有类型的 widget(任务清单 + 笔记 + 4 种日历类)并更新桌面角标 */
 suspend fun updateAllWidgets(context: Context) {
-    // 任务清单:传统 RemoteViews,系统级直推(HyperOS 也必刷),不走 Glance
+    // 传统 RemoteViews 集合:系统级直推(HyperOS 也必刷),不走 Glance
     TaskWidgetReceiver.renderAll(context)
+    NoteWidgetReceiver.renderAll(context)
     // 日历类仍为 Glance:按系统真实 appWidgetId 映射 glanceId 再 update
     updateByRealIds(context, UpNextWidgetReceiver::class.java, UpNextWidget())
     updateByRealIds(context, DailyAgendaWidgetReceiver::class.java, DailyAgendaWidget())
