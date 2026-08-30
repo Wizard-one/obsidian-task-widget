@@ -71,5 +71,5 @@ The release build uses the project-local signing configuration in `app/app/build
 ## Delivery workflow
 
 - After completing code changes, automatically create a git commit for the task's related files.
-- Automatically build the signed Release APK after committing and report the artifact path and build result.
+- Automatically build the signed Release APK after committing, rename it as `taskwidget-v<versionName>.apk`, move it to the repository root, and report the artifact path and build result.
 - Do not include unrelated user changes in automatic commits.
