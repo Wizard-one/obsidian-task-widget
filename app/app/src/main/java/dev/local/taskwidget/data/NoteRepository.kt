@@ -50,9 +50,21 @@ object NoteRepository {
         return title
     }
 
-    internal fun renderContent(template: String?, title: String, date: LocalDate): String =
-        template?.replace("{{title}}", title)?.replace("{{date}}", date.toString())
+    internal fun renderContent(
+        template: String?,
+        title: String,
+        date: LocalDate,
+        body: String = "",
+    ): String {
+        val base = template?.replace("{{title}}", title)?.replace("{{date}}", date.toString())
             ?: "# $title"
+        if (body.isEmpty() || base.isEmpty()) return if (base.isEmpty()) body else base
+        return when {
+            base.endsWith("\n\n") -> base + body
+            base.endsWith("\n") -> base + "\n" + body
+            else -> base + "\n\n" + body
+        }
+    }
 
     internal fun nextFileName(title: String, existingNames: Collection<String>): String? {
         val occupied = existingNames.mapTo(HashSet()) { it.lowercase(Locale.ROOT) }
@@ -71,6 +83,7 @@ object NoteRepository {
         folderUri: String,
         templateUri: String?,
         requestedName: String,
+        body: String = "",
         today: LocalDate = LocalDate.now(),
     ): CreateNoteResult = withContext(Dispatchers.IO) {
         val title = normalizeTitle(requestedName) ?: return@withContext CreateNoteResult.InvalidName
@@ -81,7 +94,7 @@ object NoteRepository {
         if (listing !is NoteListResult.Success) return@withContext CreateNoteResult.FolderUnavailable
         val fileName = nextFileName(title, listing.items.map { it.name })
             ?: return@withContext CreateNoteResult.Conflict
-        val content = renderContent(template, title, today)
+        val content = renderContent(template, title, today, body)
 
         val resolver = context.contentResolver
         val treeUri = try { Uri.parse(folderUri) } catch (_: Exception) {

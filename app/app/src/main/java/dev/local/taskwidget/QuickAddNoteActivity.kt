@@ -1,6 +1,7 @@
 package dev.local.taskwidget
 
 import android.appwidget.AppWidgetManager
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -11,8 +12,11 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -29,7 +33,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import dev.local.taskwidget.data.CreateNoteResult
 import dev.local.taskwidget.data.NoteRepository
@@ -64,23 +70,28 @@ class QuickAddNoteActivity : ComponentActivity() {
     @Composable
     private fun QuickAddNoteDialog(config: NoteWidgetConfig) {
         val scope = rememberCoroutineScope()
-        val focus = remember { FocusRequester() }
+        val nameFocus = remember { FocusRequester() }
+        val bodyFocus = remember { FocusRequester() }
         var name by remember { mutableStateOf("") }
+        var body by remember { mutableStateOf(TextFieldValue()) }
         var busy by remember { mutableStateOf(false) }
         var error by remember { mutableStateOf<String?>(null) }
+        var pasteMessage by remember { mutableStateOf<String?>(null) }
 
-        LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+        LaunchedEffect(Unit) { runCatching { nameFocus.requestFocus() } }
 
         fun submit() {
             if (busy || name.isBlank()) return
             busy = true
             error = null
+            pasteMessage = null
             scope.launch {
                 when (val result = NoteRepository.createNote(
-                    this@QuickAddNoteActivity,
-                    config.folderUri,
-                    config.templateUri,
-                    name,
+                    context = this@QuickAddNoteActivity,
+                    folderUri = config.folderUri,
+                    templateUri = config.templateUri,
+                    requestedName = name,
+                    body = body.text,
                 )) {
                     is CreateNoteResult.Created -> {
                         NoteWidgetReceiver.renderFolder(this@QuickAddNoteActivity, config.folderUri)
@@ -119,23 +130,63 @@ class QuickAddNoteActivity : ComponentActivity() {
             onDismissRequest = { if (!busy) finish() },
             title = { Text("新建笔记") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 500.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it; error = null },
                         label = { Text("笔记名称") },
                         placeholder = { Text("如:会议记录") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth().focusRequester(focus),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { submit() }),
+                        modifier = Modifier.fillMaxWidth().focusRequester(nameFocus),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        keyboardActions = KeyboardActions(onNext = { bodyFocus.requestFocus() }),
                         isError = error != null,
                     )
+                    OutlinedTextField(
+                        value = body,
+                        onValueChange = { body = it; pasteMessage = null },
+                        label = { Text("笔记内容") },
+                        placeholder = { Text("记录完整的 Markdown 内容…") },
+                        singleLine = false,
+                        minLines = 6,
+                        maxLines = 10,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 140.dp, max = 260.dp)
+                            .focusRequester(bodyFocus),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { submit() }),
+                    )
+                    TextButton(
+                        onClick = {
+                            val clipboard = clipboardText()
+                            if (clipboard == null) {
+                                pasteMessage = "剪贴板中没有可粘贴的文本"
+                            } else {
+                                body = insertAtSelection(body, clipboard)
+                                pasteMessage = null
+                            }
+                        },
+                        enabled = !busy,
+                    ) {
+                        Text("粘贴剪贴板内容")
+                    }
                     Text("保存到:${config.folderName}", style = MaterialTheme.typography.bodySmall)
                     Text(
-                        "模板:${config.templateName ?: "无(正文为 # 标题)"}",
+                        "模板:${config.templateName ?: "无(正文以 # 标题开头)"}",
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    Text(
+                        "模板作为笔记开头;输入或粘贴的内容会追加在模板后。",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    pasteMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             },
@@ -148,6 +199,19 @@ class QuickAddNoteActivity : ComponentActivity() {
                 TextButton(onClick = { finish() }, enabled = !busy) { Text("取消") }
             },
         )
+    }
+
+    private fun clipboardText(): String? {
+        val clipboard = getSystemService(ClipboardManager::class.java)?.primaryClip ?: return null
+        if (clipboard.itemCount == 0) return null
+        return clipboard.getItemAt(0).coerceToText(this)?.toString()?.takeIf { it.isNotEmpty() }
+    }
+
+    private fun insertAtSelection(value: TextFieldValue, pasted: String): TextFieldValue {
+        val start = minOf(value.selection.start, value.selection.end)
+        val end = maxOf(value.selection.start, value.selection.end)
+        val text = value.text.replaceRange(start, end, pasted)
+        return TextFieldValue(text, TextRange(start + pasted.length))
     }
 
     companion object {

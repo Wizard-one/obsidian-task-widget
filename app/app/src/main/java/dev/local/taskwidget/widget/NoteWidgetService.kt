@@ -13,6 +13,9 @@ import dev.local.taskwidget.data.NoteListResult
 import dev.local.taskwidget.data.NoteRepository
 import kotlinx.coroutines.runBlocking
 
+internal fun noteDisplayName(fileName: String): String =
+    if (fileName.endsWith(".md", ignoreCase = true)) fileName.dropLast(3) else fileName
+
 /** 笔记 widget 的可滚动文件名列表数据源。 */
 class NoteWidgetService : RemoteViewsService() {
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
@@ -56,7 +59,7 @@ private class NoteListFactory(
     override fun getViewAt(position: Int): RemoteViews {
         val note = items[position]
         return RemoteViews(context.packageName, R.layout.widget_note_row).apply {
-            setTextViewText(R.id.note_row_text, note.name)
+            setTextViewText(R.id.note_row_text, noteDisplayName(note.name))
             setOnClickFillInIntent(
                 R.id.note_row_body,
                 Intent()
