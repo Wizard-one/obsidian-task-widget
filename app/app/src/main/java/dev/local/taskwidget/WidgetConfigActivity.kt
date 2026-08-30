@@ -2,9 +2,12 @@ package dev.local.taskwidget
 
 import android.appwidget.AppWidgetManager
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,6 +21,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -31,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.documentfile.provider.DocumentFile
 import dev.local.taskwidget.data.WidgetFilter
 import dev.local.taskwidget.ui.AppTheme
 import dev.local.taskwidget.widget.WidgetFilterStore
@@ -77,6 +82,11 @@ class WidgetConfigActivity : ComponentActivity() {
     private fun ConfigScreen(contentPadding: androidx.compose.foundation.layout.PaddingValues) {
         val scope = rememberCoroutineScope()
         val initial = remember { WidgetFilterStore.load(this, appWidgetId) }
+        val initialNote = remember { dev.local.taskwidget.widget.TaskWidgetNoteConfigStore.load(this, appWidgetId) }
+        var noteFolderUri by remember { mutableStateOf(initialNote?.folderUri) }
+        var noteFolderName by remember { mutableStateOf(initialNote?.folderName) }
+        var noteTemplateUri by remember { mutableStateOf(initialNote?.templateUri) }
+        var noteTemplateName by remember { mutableStateOf(initialNote?.templateName) }
 
         var title by remember { mutableStateOf(initial.title) }
         var dateScope by remember { mutableStateOf(initial.dateScope) }
@@ -84,6 +94,23 @@ class WidgetConfigActivity : ComponentActivity() {
         var tagsInput by remember { mutableStateOf(initial.tags.joinToString(", ")) }
         var pathContains by remember { mutableStateOf(initial.pathContains) }
         var pathExcludes by remember { mutableStateOf(initial.excludePaths.joinToString(", ")) }
+
+        val noteFolderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
+            if (uri != null && runCatching {
+                    contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                }.isSuccess) {
+                noteFolderUri = uri.toString()
+                noteFolderName = runCatching { DocumentFile.fromTreeUri(this, uri)?.name }.getOrNull() ?: "笔记"
+            }
+        }
+        val noteTemplatePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+            val name = uri?.let { runCatching { DocumentFile.fromSingleUri(this, it)?.name }.getOrNull() }
+            if (uri != null && name?.endsWith(".md", ignoreCase = true) == true && runCatching {
+                    contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }.isSuccess) {
+                noteTemplateUri = uri.toString(); noteTemplateName = name
+            }
+        }
 
         Column(
             modifier = Modifier
@@ -141,6 +168,42 @@ class WidgetConfigActivity : ComponentActivity() {
                 modifier = Modifier.fillMaxWidth()
             )
 
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("笔记页(切换按钮显示的内容)", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (noteFolderUri == null) "尚未选择文件夹;未配置时切换到笔记页会提示重新配置"
+                    else "文件夹:${noteFolderName ?: "笔记"}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Button(onClick = { noteFolderPicker.launch(null) }) {
+                    Text(if (noteFolderUri == null) "选择笔记文件夹" else "更换笔记文件夹")
+                }
+                Text(
+                    if (noteTemplateUri == null) "模板:无(新笔记正文以 # 标题开头)"
+                    else "模板:${noteTemplateName}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            noteTemplatePicker.launch(
+                                arrayOf("text/markdown", "text/plain", "application/octet-stream", "*/*")
+                            )
+                        }
+                    ) {
+                        Text(if (noteTemplateUri == null) "选择模板" else "更换模板")
+                    }
+                    if (noteTemplateUri != null) {
+                        OutlinedButton(onClick = {
+                            noteTemplateUri = null
+                            noteTemplateName = null
+                        }) {
+                            Text("清除模板")
+                        }
+                    }
+                }
+            }
+
             Button(
                 onClick = {
                     val filter = WidgetFilter(
@@ -152,9 +215,28 @@ class WidgetConfigActivity : ComponentActivity() {
                         excludePaths = WidgetFilter.parsePathsInput(pathExcludes),
                     )
                     WidgetFilterStore.save(this@WidgetConfigActivity, appWidgetId, filter)
+                    // 笔记文件夹不是必填项:未选择时清除该实例的笔记配置
+                    val folder = noteFolderUri
+                    if (folder != null) {
+                        dev.local.taskwidget.widget.TaskWidgetNoteConfigStore.save(
+                            this@WidgetConfigActivity,
+                            appWidgetId,
+                            dev.local.taskwidget.widget.NoteWidgetConfig(
+                                folderUri = folder,
+                                folderName = noteFolderName ?: "笔记",
+                                templateUri = noteTemplateUri,
+                                templateName = noteTemplateName,
+                            ),
+                        )
+                    } else {
+                        dev.local.taskwidget.widget.TaskWidgetNoteConfigStore.delete(
+                            this@WidgetConfigActivity, intArrayOf(appWidgetId)
+                        )
+                    }
                     scope.launch {
+                        // 仅渲染当前实例,避免全量刷新其他 widget
                         dev.local.taskwidget.widget.TaskWidgetReceiver
-                            .renderAll(this@WidgetConfigActivity)
+                            .render(this@WidgetConfigActivity, intArrayOf(appWidgetId))
                         setResult(
                             RESULT_OK,
                             Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)

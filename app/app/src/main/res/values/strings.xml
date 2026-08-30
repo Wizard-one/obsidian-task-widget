@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">任务小组件</string>
     <string name="widget_label">任务清单</string>
-    <string name="widget_description">在主屏幕查看并勾选完成 Obsidian vault 中的任务</string>
+    <string name="widget_description">在主屏幕查看并勾选 Obsidian vault 中的任务,可切换为笔记文件夹列表</string>
     <string name="note_widget_label">笔记文件夹</string>
     <string name="note_widget_title">笔记</string>
     <string name="note_widget_description">显示文件夹中的 Markdown 笔记并用模板快速新建</string>

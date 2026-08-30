@@ -6,7 +6,6 @@
     android:background="@drawable/widget_bg"
     android:padding="10dp">
 
-    <!-- 头部:标题 + 计数 + 打开/添加/刷新 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -15,78 +14,100 @@
 
         <TextView
             android:id="@+id/widget_title"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:text="任务"
             android:textStyle="bold"
             android:textSize="14sp"
             android:textColor="@color/widget_text"
-            android:maxLines="1" />
+            android:maxLines="1"
+            android:ellipsize="end" />
 
         <TextView
             android:id="@+id/widget_count"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:paddingStart="6dp"
             android:paddingEnd="6dp"
             android:textSize="11sp"
             android:textColor="@color/widget_text_dim" />
 
         <ImageView
-            android:id="@+id/btn_open"
+            android:id="@+id/btn_switch"
             android:layout_width="34dp"
             android:layout_height="34dp"
             android:padding="6dp"
             android:scaleType="fitCenter"
-            android:contentDescription="打开 App" />
+            android:contentDescription="切换内容" />
 
         <ImageView
             android:id="@+id/btn_add"
             android:layout_width="34dp"
             android:layout_height="34dp"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="6dp"
             android:padding="6dp"
             android:scaleType="fitCenter"
-            android:contentDescription="快速添加" />
+            android:contentDescription="添加" />
 
-        <!-- 刷新:与"添加"拉开较大间距,避免误触 -->
         <ImageView
             android:id="@+id/btn_refresh"
-            android:layout_width="40dp"
+            android:layout_width="34dp"
             android:layout_height="34dp"
-            android:layout_marginStart="16dp"
-            android:paddingLeft="12dp"
-            android:paddingTop="6dp"
-            android:paddingRight="4dp"
-            android:paddingBottom="6dp"
+            android:layout_marginStart="6dp"
+            android:padding="6dp"
             android:scaleType="fitCenter"
             android:contentDescription="刷新" />
     </LinearLayout>
 
-    <!-- 列表区:ListView 可滚动;空时显示 empty -->
-    <FrameLayout
+    <ViewFlipper
+        android:id="@+id/task_content_flipper"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginTop="4dp">
+        android:layout_marginTop="4dp"
+        android:inAnimation="@anim/widget_flip_in"
+        android:outAnimation="@anim/widget_flip_out"
+        android:animateFirstView="false">
 
-        <ListView
-            android:id="@+id/list"
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:divider="@null"
-            android:dividerHeight="0dp" />
+            android:layout_height="match_parent">
+            <ListView
+                android:id="@+id/list"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:divider="@null"
+                android:dividerHeight="0dp" />
+            <TextView
+                android:id="@+id/empty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:padding="18dp"
+                android:textSize="14sp"
+                android:textColor="@color/widget_text_dim" />
+        </FrameLayout>
 
-        <TextView
-            android:id="@+id/empty"
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:gravity="center"
-            android:paddingTop="18dp"
-            android:textSize="14sp"
-            android:textColor="@color/widget_text_dim" />
-    </FrameLayout>
-
+            android:layout_height="match_parent">
+            <ListView
+                android:id="@+id/task_note_list"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:divider="@null"
+                android:dividerHeight="0dp" />
+            <TextView
+                android:id="@+id/task_note_empty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:padding="18dp"
+                android:textSize="14sp"
+                android:textColor="@color/widget_text_dim" />
+        </FrameLayout>
+    </ViewFlipper>
 </LinearLayout>

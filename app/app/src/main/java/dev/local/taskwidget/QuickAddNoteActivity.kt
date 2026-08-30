@@ -56,19 +56,24 @@ class QuickAddNoteActivity : ComponentActivity() {
             AppWidgetManager.EXTRA_APPWIDGET_ID,
             AppWidgetManager.INVALID_APPWIDGET_ID,
         ) ?: AppWidgetManager.INVALID_APPWIDGET_ID
-        val config = NoteWidgetConfigStore.load(this, appWidgetId)
+        val taskWidgetSource = intent.getBooleanExtra(EXTRA_TASK_WIDGET_SOURCE, false)
+        val config = if (taskWidgetSource) {
+            dev.local.taskwidget.widget.TaskWidgetNoteConfigStore.load(this, appWidgetId)
+        } else {
+            NoteWidgetConfigStore.load(this, appWidgetId)
+        }
         if (config == null) {
             Toast.makeText(this, "笔记 Widget 尚未配置", Toast.LENGTH_SHORT).show()
             finish()
             return
         }
         setContent {
-            AppTheme { QuickAddNoteDialog(config) }
+            AppTheme { QuickAddNoteDialog(config, taskWidgetSource) }
         }
     }
 
     @Composable
-    private fun QuickAddNoteDialog(config: NoteWidgetConfig) {
+    private fun QuickAddNoteDialog(config: NoteWidgetConfig, taskWidgetSource: Boolean) {
         val scope = rememberCoroutineScope()
         val nameFocus = remember { FocusRequester() }
         val bodyFocus = remember { FocusRequester() }
@@ -94,7 +99,11 @@ class QuickAddNoteActivity : ComponentActivity() {
                     body = body.text,
                 )) {
                     is CreateNoteResult.Created -> {
-                        NoteWidgetReceiver.renderFolder(this@QuickAddNoteActivity, config.folderUri)
+                        if (taskWidgetSource) {
+                            dev.local.taskwidget.widget.TaskWidgetReceiver.renderNotesFolder(this@QuickAddNoteActivity, config.folderUri)
+                        } else {
+                            NoteWidgetReceiver.renderFolder(this@QuickAddNoteActivity, config.folderUri)
+                        }
                         Toast.makeText(
                             this@QuickAddNoteActivity,
                             "已创建 ${result.fileName}",
@@ -215,9 +224,16 @@ class QuickAddNoteActivity : ComponentActivity() {
     }
 
     companion object {
+        private const val EXTRA_TASK_WIDGET_SOURCE = "taskWidgetSource"
+
         fun intent(context: Context, appWidgetId: Int): Intent =
             Intent(context, QuickAddNoteActivity::class.java)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
                 .setData(Uri.parse("taskwidget://notes/add/$appWidgetId"))
+
+        fun taskWidgetIntent(context: Context, appWidgetId: Int): Intent =
+            intent(context, appWidgetId)
+                .putExtra(EXTRA_TASK_WIDGET_SOURCE, true)
+                .setData(Uri.parse("taskwidget://task-notes/add/$appWidgetId"))
     }
 }

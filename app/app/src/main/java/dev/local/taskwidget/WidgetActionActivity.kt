@@ -1,5 +1,6 @@
 package dev.local.taskwidget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -69,6 +70,16 @@ class WidgetActionActivity : ComponentActivity() {
                 }
                 finish()
             }
+            ACTION_TOGGLE_CONTENT -> {
+                val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+                if (id != AppWidgetManager.INVALID_APPWIDGET_ID) scope.launch { dev.local.taskwidget.widget.TaskWidgetReceiver.toggleContent(appCtx, id) }
+                finish()
+            }
+            ACTION_REFRESH_NOTES -> {
+                val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+                if (id != AppWidgetManager.INVALID_APPWIDGET_ID) scope.launch { dev.local.taskwidget.widget.TaskWidgetReceiver.render(appCtx, intArrayOf(id)); toast(appCtx, "已刷新") }
+                finish()
+            }
             else -> finish()
         }
     }
@@ -83,6 +94,8 @@ class WidgetActionActivity : ComponentActivity() {
         const val ACTION_COMPLETE = "complete"
         const val ACTION_REFRESH = "refresh"
         const val ACTION_EDIT = "edit"
+        const val ACTION_TOGGLE_CONTENT = "toggleContent"
+        const val ACTION_REFRESH_NOTES = "refreshNotes"
 
         private suspend fun toast(context: Context, msg: String) = withContext(Dispatchers.Main) {
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
@@ -96,10 +109,18 @@ class WidgetActionActivity : ComponentActivity() {
                 .setData(Uri.parse("taskwidget://complete/${fileUri.hashCode()}/${rawLine.hashCode()}"))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
 
-        fun refreshIntent(context: Context): Intent =
+        fun refreshIntent(context: Context, appWidgetId: Int? = null, notesOnly: Boolean = false): Intent =
             Intent(context, WidgetActionActivity::class.java)
-                .putExtra(EXTRA_ACTION, ACTION_REFRESH)
-                .setData(Uri.parse("taskwidget://refresh"))
+                .putExtra(EXTRA_ACTION, if (notesOnly) ACTION_REFRESH_NOTES else ACTION_REFRESH)
+                .apply { appWidgetId?.let { putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, it) } }
+                .setData(Uri.parse("taskwidget://refresh/${appWidgetId ?: "all"}/${if (notesOnly) "notes" else "tasks"}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+
+        fun toggleIntent(context: Context, appWidgetId: Int): Intent =
+            Intent(context, WidgetActionActivity::class.java)
+                .putExtra(EXTRA_ACTION, ACTION_TOGGLE_CONTENT)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                .setData(Uri.parse("taskwidget://toggle/$appWidgetId"))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
     }
 }
