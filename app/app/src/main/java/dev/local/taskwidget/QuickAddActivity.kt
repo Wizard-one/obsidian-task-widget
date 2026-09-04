@@ -48,7 +48,7 @@ import java.time.ZoneOffset
 
 /**
  * 轻量"快速添加"对话框 Activity。入口:桌面 widget ➕、快捷设置磁贴、分享文本、选词。
- * 支持截止日期 / 开始日期 / 优先级(TaskForge 式选择器 + 自然语言日期解析)。
+ * 支持截止日期 / 开始日期 / 优先级选择与自然语言日期解析。
  */
 class QuickAddActivity : ComponentActivity() {
 

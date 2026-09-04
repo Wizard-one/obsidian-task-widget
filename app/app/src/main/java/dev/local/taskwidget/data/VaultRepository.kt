@@ -41,7 +41,7 @@ data class TaskItem(
     val scheduled: LocalDate? get() = parseDate(scheduledDate)
     val start: LocalDate? get() = parseDate(startDate)
 
-    /** TaskForge/Obsidian Tasks 的 happens on or before:开始日或截止日任一不晚于目标日期 */
+    /** “happens on or before”：开始日或截止日任一不晚于目标日期。 */
     fun happensOnOrBefore(date: LocalDate): Boolean =
         listOfNotNull(start, actualDue).any { !it.isAfter(date) }
 }

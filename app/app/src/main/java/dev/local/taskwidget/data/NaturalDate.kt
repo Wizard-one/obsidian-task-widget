@@ -5,7 +5,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 /**
- * 轻量自然语言日期解析(对标 TaskForge 的快速添加输入)。
+ * 轻量自然语言日期解析，用于快速添加输入。
  * 支持:today/tomorrow/yesterday、下周几、"in N days/weeks"、周几名、
  * next week/next month、以及 ISO `2026-07-15`、`07-15`、`7/15`。
  * 中文同义词:今天/明天/后天/下周。

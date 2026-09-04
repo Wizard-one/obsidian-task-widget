@@ -15,7 +15,7 @@ import java.time.ZoneId
 
 /**
  * 提醒/刷新调度:
- *  - 每天 08:00 发"今日到期 + 已过期"摘要通知(对标 TaskForge 的 morning digest)
+ *  - 每天 08:00 发"今日到期 + 已过期"摘要通知
  *  - 每天 00:01 刷新 widget(跨天后"今天/过期"状态更新)
  * 使用精确闹钟(有权限时),开机/时区变化后由 [RefreshReceiver] 重排。
  */

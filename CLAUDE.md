@@ -13,7 +13,7 @@ TaskWidget is a Kotlin/Jetpack Compose Android app (`app/`) for exposing Obsidia
 
 ## Commands
 
-Run from the repository root (`G:\Project\taskforge`):
+Run from the repository root:
 
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Microsoft\jdk-17.0.19.10-hotspot"
@@ -36,9 +36,9 @@ $env:JAVA_HOME = "C:\Program Files\Microsoft\jdk-17.0.19.10-hotspot"
 APK outputs:
 
 - Debug: `app/app/build/outputs/apk/debug/app-debug.apk`
-- Signed release: `app/app/build/outputs/apk/release/app-release.apk`
+- Release: `app/app/build/outputs/apk/release/app-release.apk`
 
-The release build uses the project-local signing configuration in `app/app/build.gradle.kts`; retain the existing keystore so upgrades preserve the package signature. `lintDebug` currently fails on pre-existing API-29 `Theme.DeviceDefault.DayNight` references while `minSdk` is 26; do not treat that baseline failure as caused by unrelated feature work.
+Release signing is loaded only from the ignored `app/signing.properties` file. `lintDebug` currently fails on pre-existing API-29 `Theme.DeviceDefault.DayNight` references while `minSdk` is 26; do not treat that baseline failure as caused by unrelated feature work.
 
 ## Architecture
 

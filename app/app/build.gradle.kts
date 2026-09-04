@@ -1,8 +1,18 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val signingProperties = Properties().apply {
+    val propertiesFile = rootProject.file("signing.properties")
+    if (propertiesFile.isFile) propertiesFile.inputStream().use(::load)
+}
+
+val hasReleaseSigning = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+    .all { !signingProperties.getProperty(it).isNullOrBlank() }
 
 android {
     namespace = "dev.local.taskwidget"
@@ -17,18 +27,20 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            storeFile = rootProject.file("keystore/taskwidget.jks")
-            storePassword = "taskwidget"
-            keyAlias = "taskwidget"
-            keyPassword = "taskwidget"
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(signingProperties.getProperty("storeFile"))
+                storePassword = signingProperties.getProperty("storePassword")
+                keyAlias = signingProperties.getProperty("keyAlias")
+                keyPassword = signingProperties.getProperty("keyPassword")
+            }
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 

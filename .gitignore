@@ -1,5 +1,6 @@
 # Claude local settings
 .claude/settings.local.json
+.claude/
 
 # 大二进制文件 / 构建产物(不入库)
 *.apk
@@ -8,11 +9,13 @@
 
 # Android 构建
 app/.gradle/
+.gradle-user/
 app/.kotlin/
 app/build/
 app/app/build/
 **/build/
 local.properties
+signing.properties
 
 # 签名密钥(绝不入库)
 keystore/
