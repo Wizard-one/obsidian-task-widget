@@ -443,13 +443,14 @@ class TaskListActivity : ComponentActivity() {
 
     private fun groupByDue(tasks: List<TaskItem>): List<Pair<String, List<TaskItem>>> {
         val today = LocalDate.now()
-        val order = listOf("已过期", "今天", "明天", "本周", "以后", "无日期")
+        val order = listOf("已过期", "今天", "明天", "本周", "以后", "已开始", "无日期")
         val buckets = tasks.groupBy { t ->
             val d = t.due
             when {
                 d == null -> "无日期"
                 t.actualDue?.isBefore(today) == true -> "已过期"
-                d.isBefore(today) -> "无日期"
+                t.actualDue == null && t.start?.isBefore(today) == true -> "已开始"
+                d.isBefore(today) -> "以后"
                 d == today -> "今天"
                 d == today.plusDays(1) -> "明天"
                 !d.isAfter(today.plusDays(7)) -> "本周"
