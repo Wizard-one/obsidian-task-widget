@@ -24,13 +24,12 @@ data class WidgetFilter(
 
     fun apply(tasks: List<TaskItem>, today: LocalDate = LocalDate.now()): List<TaskItem> =
         tasks.filter { task ->
-            val due = task.actualDue
             val dateOk = when {
-                // "今天 + 已过期"只按真正的截止日判断；开始日不代表逾期。
+                // 开始日决定任务何时进入范围，但不会让它显示为“已过期”。
                 dateScope == SCOPE_TODAY -> task.happensOnOrBefore(today)
+                dateScope == SCOPE_WEEK -> task.happensOnOrBefore(today.plusDays(7))
                 // 无日期任务只在"全部"范围下出现(且受 includeUndated 控制)。
-                due == null -> dateScope == SCOPE_ALL && includeUndated
-                dateScope == SCOPE_WEEK -> !due.isAfter(today.plusDays(7))
+                task.due == null -> dateScope == SCOPE_ALL && includeUndated
                 else -> true
             }
             val tagOk = tags.isEmpty() || tags.any { it in task.tags }

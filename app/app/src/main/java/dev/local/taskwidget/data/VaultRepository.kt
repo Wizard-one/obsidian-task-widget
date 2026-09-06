@@ -41,9 +41,12 @@ data class TaskItem(
     val scheduled: LocalDate? get() = parseDate(scheduledDate)
     val start: LocalDate? get() = parseDate(startDate)
 
-    /** “截止于或早于”：只按真正的截止日判断，开始日不表示逾期。 */
+    /**
+     * 是否已进入小组件的日期范围：截止日或开始日任一不晚于范围终点即可。
+     * 开始日只影响显示范围，绝不表示任务逾期；逾期判断必须使用 [actualDue]。
+     */
     fun happensOnOrBefore(date: LocalDate): Boolean =
-        actualDue?.let { !it.isAfter(date) } == true
+        listOfNotNull(start, actualDue).any { !it.isAfter(date) }
 }
 
 /**
