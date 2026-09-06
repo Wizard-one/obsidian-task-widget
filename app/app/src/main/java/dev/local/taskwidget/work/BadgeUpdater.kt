@@ -15,7 +15,7 @@ object BadgeUpdater {
 
     fun update(context: Context) {
         val today = LocalDate.now()
-        val count = VaultRepository.loadTasks(context).count { it.due != null && !it.due!!.isAfter(today) }
+        val count = VaultRepository.loadTasks(context).count { it.actualDue?.let { due -> !due.isAfter(today) } == true }
         val launcherClass = launcherEntryClass(context) ?: return
 
         // Nova / Apex / 大部分基于 anddoes 的启动器

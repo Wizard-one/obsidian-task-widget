@@ -41,8 +41,8 @@ class ReminderReceiver : BroadcastReceiver() {
     private fun postDigest(context: Context) {
         val today = LocalDate.now()
         val tasks = VaultRepository.loadTasks(context)
-        val dueToday = tasks.count { it.due == today }
-        val overdue = tasks.count { it.due?.isBefore(today) == true }
+        val dueToday = tasks.count { it.actualDue == today }
+        val overdue = tasks.count { it.actualDue?.isBefore(today) == true }
         if (dueToday == 0 && overdue == 0) return
 
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)

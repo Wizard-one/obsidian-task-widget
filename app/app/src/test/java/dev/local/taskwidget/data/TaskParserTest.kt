@@ -127,7 +127,7 @@ class TaskParserTest {
     fun `edit line rebuilds text due priority`() {
         val edited = TaskParser.editLine(
             "  - [ ] 旧文本 📅 2026-07-15 ⏫",
-            "新文本 #tag", LocalDate.of(2026, 8, 1), Priority.LOW
+            "新文本 #tag", LocalDate.of(2026, 8, 1), null, Priority.LOW
         )
         assertEquals("  - [ ] 新文本 #tag 🔽 📅 2026-08-01", edited)
     }
@@ -136,20 +136,20 @@ class TaskParserTest {
     fun `edit line preserves unmanaged metadata`() {
         val edited = TaskParser.editLine(
             "- [ ] 浇花 🔁 every week ⏳ 2026-07-12 🆔 abc 📅 2026-07-13",
-            "浇花草", null, Priority.NONE
+            "浇花草", null, null, Priority.NONE
         )
         assertEquals("- [ ] 浇花草 🔁 every week ⏳ 2026-07-12 🆔 abc", edited)
     }
 
     @Test
     fun `edit line clears due and priority`() {
-        val edited = TaskParser.editLine("- [ ] 甲 📅 2026-07-15 ⏫", "甲", null, Priority.NONE)
+        val edited = TaskParser.editLine("- [ ] 甲 📅 2026-07-15 ⏫", "甲", null, null, Priority.NONE)
         assertEquals("- [ ] 甲", edited)
     }
 
     @Test
     fun `edit line on non task returns null`() {
-        assertNull(TaskParser.editLine("普通文本", "x", null, Priority.NONE))
+        assertNull(TaskParser.editLine("普通文本", "x", null, null, Priority.NONE))
     }
 
     @Test
@@ -157,9 +157,18 @@ class TaskParserTest {
         val content = "- [ ] 甲\n- [ ] 乙 📅 2026-07-15\n"
         val result = TaskParser.editInContent(
             content, "- [ ] 乙 📅 2026-07-15",
-            "乙改", LocalDate.of(2026, 7, 20), Priority.HIGH
+            "乙改", LocalDate.of(2026, 7, 20), null, Priority.HIGH
         )
         assertEquals("- [ ] 甲\n- [ ] 乙改 ⏫ 📅 2026-07-20\n", result)
+    }
+
+    @Test
+    fun `edit line updates start date`() {
+        val edited = TaskParser.editLine(
+            "- [ ] 甲 🛫 2026-07-10 📅 2026-07-15",
+            "甲", LocalDate.of(2026, 7, 20), LocalDate.of(2026, 7, 12), Priority.NONE
+        )
+        assertEquals("- [ ] 甲 🛫 2026-07-12 📅 2026-07-20", edited)
     }
 
     @Test

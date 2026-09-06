@@ -215,17 +215,23 @@ object TaskParser {
     }
 
     /**
-     * 用新的文本/截止日期/优先级重建任务行。
-     * 保留原有缩进、列表符、勾选状态,以及本编辑器不管理的元数据(⏳ 🛫 ➕ 🔁 🆔 ⛔)。
+     * 用新的文本/截止日期/开始日期/优先级重建任务行。
+     * 保留原有缩进、列表符、勾选状态,以及本编辑器不管理的元数据(⏳ ➕ 🔁 🆔 ⛔)。
      * 不是任务行时返回 null。
      */
-    fun editLine(rawLine: String, newText: String, newDue: LocalDate?, newPriority: Priority): String? {
+    fun editLine(
+        rawLine: String,
+        newText: String,
+        newDue: LocalDate?,
+        newStart: LocalDate?,
+        newPriority: Priority,
+    ): String? {
         val m = TASK_PREFIX.find(rawLine) ?: return null
         val prefix = m.groupValues[1]
         val body = m.groupValues[2]
 
-        // 保留的元数据(按在原行出现顺序),不含 due 和优先级(这两个由参数重设)
-        val preservePatterns = listOf(SCHEDULED, START, CREATED, RECUR, ID, DEPENDS)
+        // 保留的元数据(按在原行出现顺序),不含截止日、开始日和优先级(由参数重设)
+        val preservePatterns = listOf(SCHEDULED, CREATED, RECUR, ID, DEPENDS)
         val preserved = preservePatterns
             .flatMap { p -> p.findAll(body).map { it.range.first to it.value.trim() } }
             .sortedBy { it.first }
@@ -235,6 +241,7 @@ object TaskParser {
         val sb = StringBuilder(prefix).append(' ').append(newText.trim())
         if (newPriority.marker.isNotEmpty()) sb.append(' ').append(newPriority.marker)
         for (token in preserved) sb.append(' ').append(token)
+        if (newStart != null) sb.append(" 🛫 ").append(newStart.format(ISO_DATE))
         if (newDue != null) sb.append(" 📅 ").append(newDue.format(ISO_DATE))
         return sb.toString()
     }
@@ -276,8 +283,11 @@ object TaskParser {
         rawLine: String,
         newText: String,
         newDue: LocalDate?,
+        newStart: LocalDate?,
         newPriority: Priority,
-    ): String? = replaceLineInContent(content, rawLine) { editLine(it, newText, newDue, newPriority) }
+    ): String? = replaceLineInContent(content, rawLine) {
+        editLine(it, newText, newDue, newStart, newPriority)
+    }
 
     /**
      * 从文件内容中删除与 [rawLine] 完全一致的整行(保留其余行与行尾风格)。

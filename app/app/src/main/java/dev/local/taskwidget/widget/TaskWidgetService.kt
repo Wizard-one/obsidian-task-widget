@@ -58,7 +58,8 @@ private class TaskListFactory(
         val row = RemoteViews(context.packageName, R.layout.widget_task_row)
         setIcon(row, R.id.row_check, context, R.drawable.ic_check_box_outline, 24, iconColor)
         row.setTextViewText(R.id.row_text, priorityPrefix(task.priorityOrder) + task.text)
-        val due = task.due
+        val due = task.actualDue
+        val start = task.start
         if (due != null) {
             row.setViewVisibility(R.id.row_due, View.VISIBLE)
             row.setTextViewText(R.id.row_due, dueLabel(due))
@@ -66,6 +67,10 @@ private class TaskListFactory(
                 R.id.row_due,
                 if (due.isBefore(LocalDate.now())) 0xFFE53935.toInt() else iconColor
             )
+        } else if (start != null) {
+            row.setViewVisibility(R.id.row_due, View.VISIBLE)
+            row.setTextViewText(R.id.row_due, "🛫 ${start.monthValue}/${start.dayOfMonth}")
+            row.setTextColor(R.id.row_due, iconColor)
         } else {
             row.setViewVisibility(R.id.row_due, View.GONE)
         }

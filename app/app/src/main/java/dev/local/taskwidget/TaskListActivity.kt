@@ -300,7 +300,7 @@ class TaskListActivity : ComponentActivity() {
                                     Checkbox(checked = false, onCheckedChange = { onComplete(task) })
                                     Column(modifier = Modifier.padding(vertical = 6.dp)) {
                                         Text(priorityPrefix(task.priorityOrder) + task.text, fontSize = 14.sp)
-                                        task.due?.let { DueText(it) }
+                                        TaskDateText(task)
                                     }
                                 }
                             }
@@ -318,7 +318,7 @@ class TaskListActivity : ComponentActivity() {
         var month by remember { mutableStateOf(YearMonth.now()) }
         var selected by remember { mutableStateOf(LocalDate.now()) }
         val today = LocalDate.now()
-        val byDate = tasks.filter { it.due != null }.groupBy { it.due!! }
+        val byDate = tasks.filter { it.actualDue != null }.groupBy { it.actualDue!! }
 
         Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(8.dp)) {
@@ -410,7 +410,7 @@ class TaskListActivity : ComponentActivity() {
             Column(modifier = Modifier.padding(vertical = 4.dp)) {
                 Text(priorityPrefix(task.priorityOrder) + task.text, fontSize = 15.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    task.due?.let { DueText(it) }
+                    TaskDateText(task)
                     if (task.tags.isNotEmpty()) {
                         Text(task.tags.joinToString(" ") { "#$it" }, fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -428,6 +428,19 @@ class TaskListActivity : ComponentActivity() {
         )
     }
 
+    @Composable
+    private fun TaskDateText(task: TaskItem) {
+        task.actualDue?.let { DueText(it) }
+            ?: task.start?.let { start ->
+                Text(
+                    "🛫 ${start.monthValue}/${start.dayOfMonth}",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+    }
+
     private fun groupByDue(tasks: List<TaskItem>): List<Pair<String, List<TaskItem>>> {
         val today = LocalDate.now()
         val order = listOf("已过期", "今天", "明天", "本周", "以后", "无日期")
@@ -435,7 +448,8 @@ class TaskListActivity : ComponentActivity() {
             val d = t.due
             when {
                 d == null -> "无日期"
-                d.isBefore(today) -> "已过期"
+                t.actualDue?.isBefore(today) == true -> "已过期"
+                d.isBefore(today) -> "无日期"
                 d == today -> "今天"
                 d == today.plusDays(1) -> "明天"
                 !d.isAfter(today.plusDays(7)) -> "本周"

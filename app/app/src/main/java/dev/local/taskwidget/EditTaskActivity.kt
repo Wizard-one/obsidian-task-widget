@@ -54,7 +54,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 /**
- * 从 widget 点击任务进入的编辑页:改文本、截止日期、优先级,保存写回 markdown。
+ * 从 widget 点击任务进入的编辑页:改文本、截止/开始日期、优先级,保存写回 markdown。
  */
 class EditTaskActivity : ComponentActivity() {
 
@@ -99,7 +99,10 @@ class EditTaskActivity : ComponentActivity() {
                         )
                     }
                 ) { padding ->
-                    EditScreen(padding, fileUri, rawLine, path, parsed.text, parsed.dueDate, parsed.priority)
+                    EditScreen(
+                        padding, fileUri, rawLine, path, parsed.text,
+                        parsed.dueDate, parsed.startDate, parsed.priority
+                    )
                 }
             }
         }
@@ -114,13 +117,15 @@ class EditTaskActivity : ComponentActivity() {
         path: String,
         initialText: String,
         initialDue: LocalDate?,
+        initialStart: LocalDate?,
         initialPriority: Priority,
     ) {
         val scope = rememberCoroutineScope()
         var text by remember { mutableStateOf(initialText) }
         var due by remember { mutableStateOf(initialDue) }
+        var start by remember { mutableStateOf(initialStart) }
         var priority by remember { mutableStateOf(initialPriority) }
-        var showDatePicker by remember { mutableStateOf(false) }
+        var pickingDate by remember { mutableStateOf<String?>(null) }
         var saving by remember { mutableStateOf(false) }
         var confirmingDelete by remember { mutableStateOf(false) }
 
@@ -152,11 +157,23 @@ class EditTaskActivity : ComponentActivity() {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("截止日期", style = MaterialTheme.typography.titleMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { showDatePicker = true }) {
+                    OutlinedButton(onClick = { pickingDate = "due" }) {
                         Text(due?.toString() ?: "选择日期")
                     }
                     if (due != null) {
                         TextButton(onClick = { due = null }) { Text("清除") }
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("开始日期", style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { pickingDate = "start" }) {
+                        Text(start?.toString() ?: "选择日期")
+                    }
+                    if (start != null) {
+                        TextButton(onClick = { start = null }) { Text("清除") }
                     }
                 }
             }
@@ -186,7 +203,7 @@ class EditTaskActivity : ComponentActivity() {
                         scope.launch {
                             val ok = VaultRepository.editTask(
                                 this@EditTaskActivity, fileUri, rawLine,
-                                text.trim(), due, priority
+                                text.trim(), due, start, priority
                             )
                             if (!ok) {
                                 VaultRepository.noteFileChanged(this@EditTaskActivity, Uri.parse(fileUri))
@@ -245,23 +262,25 @@ class EditTaskActivity : ComponentActivity() {
             )
         }
 
-        if (showDatePicker) {
+        if (pickingDate != null) {
+            val target = pickingDate!!
             val state = rememberDatePickerState(
-                initialSelectedDateMillis = (due ?: LocalDate.now())
+                initialSelectedDateMillis = ((if (target == "due") due else start) ?: LocalDate.now())
                     .atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
             )
             DatePickerDialog(
-                onDismissRequest = { showDatePicker = false },
+                onDismissRequest = { pickingDate = null },
                 confirmButton = {
                     TextButton(onClick = {
                         state.selectedDateMillis?.let {
-                            due = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
+                            val date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
+                            if (target == "due") due = date else start = date
                         }
-                        showDatePicker = false
+                        pickingDate = null
                     }) { Text("确定") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showDatePicker = false }) { Text("取消") }
+                    TextButton(onClick = { pickingDate = null }) { Text("取消") }
                 }
             ) {
                 DatePicker(state = state)

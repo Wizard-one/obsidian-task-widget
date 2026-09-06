@@ -41,9 +41,9 @@ data class TaskItem(
     val scheduled: LocalDate? get() = parseDate(scheduledDate)
     val start: LocalDate? get() = parseDate(startDate)
 
-    /** “happens on or before”：开始日或截止日任一不晚于目标日期。 */
+    /** “截止于或早于”：只按真正的截止日判断，开始日不表示逾期。 */
     fun happensOnOrBefore(date: LocalDate): Boolean =
-        listOfNotNull(start, actualDue).any { !it.isAfter(date) }
+        actualDue?.let { !it.isAfter(date) } == true
 }
 
 /**
@@ -401,7 +401,7 @@ object VaultRepository {
         }
 
     /**
-     * 用新的文本/截止日期/优先级重写任务行并写回源 markdown 文件。
+     * 用新的文本/截止日期/开始日期/优先级重写任务行并写回源 markdown 文件。
      */
     suspend fun editTask(
         context: Context,
@@ -409,10 +409,11 @@ object VaultRepository {
         rawLine: String,
         newText: String,
         newDue: LocalDate?,
+        newStart: LocalDate?,
         newPriority: Priority,
     ): Boolean =
         rewriteTaskLine(context, fileUriStr, rawLine) { content ->
-            TaskParser.editInContent(content, rawLine, newText, newDue, newPriority)
+            TaskParser.editInContent(content, rawLine, newText, newDue, newStart, newPriority)
         }
 
     /**

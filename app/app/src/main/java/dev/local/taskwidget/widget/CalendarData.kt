@@ -17,11 +17,11 @@ object CalendarData {
         val isToday: Boolean,
     )
 
-    /** 缓存里所有带截止日期的待办任务,按日期分组 */
+    /** 缓存里所有真正带截止日期的待办任务,按日期分组。开始日不参与逾期日程。 */
     fun tasksByDate(context: Context): Map<LocalDate, List<TaskItem>> =
         VaultRepository.loadTasks(context)
-            .filter { it.due != null }
-            .groupBy { it.due!! }
+            .filter { it.actualDue != null }
+            .groupBy { it.actualDue!! }
 
     /** 某天的任务(按优先级排序) */
     fun tasksOn(context: Context, date: LocalDate): List<TaskItem> =
@@ -32,8 +32,8 @@ object CalendarData {
      */
     fun upcoming(context: Context, today: LocalDate = LocalDate.now(), limit: Int = 12): List<TaskItem> =
         VaultRepository.loadTasks(context)
-            .filter { it.due != null }
-            .sortedWith(compareBy({ it.due }, { it.priorityOrder }))
+            .filter { it.actualDue != null }
+            .sortedWith(compareBy({ it.actualDue }, { it.priorityOrder }))
             .take(limit)
 
     /**
@@ -48,7 +48,7 @@ object CalendarData {
         val result = mutableListOf<Pair<LocalDate?, List<TaskItem>>>()
 
         val overdue = byDate.filterKeys { it.isBefore(today) }.values.flatten()
-            .sortedWith(compareBy({ it.due }, { it.priorityOrder }))
+            .sortedWith(compareBy({ it.actualDue }, { it.priorityOrder }))
         if (overdue.isNotEmpty()) result += null to overdue // null 表头 = 已过期
 
         for (i in 0 until days) {

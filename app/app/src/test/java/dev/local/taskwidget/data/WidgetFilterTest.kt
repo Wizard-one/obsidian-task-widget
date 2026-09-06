@@ -67,7 +67,7 @@ class WidgetFilterTest {
     }
 
     @Test
-    fun `today scope uses happens on or before`() {
+    fun `today scope uses only actual due date`() {
         val happensTasks = listOf(
             task("开始于昨天,截止未来", start = "2026-07-10", due = "2026-07-20"),
             task("开始于明天,截止今天", start = "2026-07-12", due = "2026-07-11"),
@@ -78,7 +78,7 @@ class WidgetFilterTest {
         val result = WidgetFilter(dateScope = WidgetFilter.SCOPE_TODAY, includeUndated = true)
             .apply(happensTasks, today)
         assertEquals(
-            listOf("开始于昨天,截止未来", "开始于明天,截止今天"),
+            listOf("开始于明天,截止今天"),
             result.map { it.text }
         )
     }
