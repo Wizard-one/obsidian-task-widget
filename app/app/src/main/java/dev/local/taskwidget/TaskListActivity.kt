@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
@@ -67,6 +66,7 @@ import dev.local.taskwidget.data.ObsidianLink
 import dev.local.taskwidget.data.Priority
 import dev.local.taskwidget.data.TaskItem
 import dev.local.taskwidget.data.VaultRepository
+import dev.local.taskwidget.data.groupTasksByCalendarDate
 import dev.local.taskwidget.widget.updateAllWidgets
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -169,35 +169,39 @@ class TaskListActivity : ComponentActivity() {
                 )
             }
         ) { padding ->
-            Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    ViewMode.entries.forEachIndexed { i, m ->
-                        SegmentedButton(
-                            selected = view == m,
-                            onClick = { view = m },
-                            shape = SegmentedButtonDefaults.itemShape(i, ViewMode.entries.size)
-                        ) { Text(m.label) }
-                    }
-                }
-                if (view != ViewMode.CALENDAR) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            val header: @Composable () -> Unit = {
+                Column {
+                    SingleChoiceSegmentedButtonRow(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        Text("排序", style = MaterialTheme.typography.labelMedium)
-                        SortMode.entries.forEach { m ->
-                            FilterChip(selected = sort == m, onClick = { sort = m }, label = { Text(m.label) })
+                        ViewMode.entries.forEachIndexed { i, m ->
+                            SegmentedButton(
+                                selected = view == m,
+                                onClick = { view = m },
+                                shape = SegmentedButtonDefaults.itemShape(i, ViewMode.entries.size)
+                            ) { Text(m.label) }
+                        }
+                    }
+                    if (view != ViewMode.CALENDAR) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("排序", style = MaterialTheme.typography.labelMedium)
+                            SortMode.entries.forEach { m ->
+                                FilterChip(selected = sort == m, onClick = { sort = m }, label = { Text(m.label) })
+                            }
                         }
                     }
                 }
-                val onLong: (TaskItem) -> Unit = { actionTask = it }
+            }
+            val onLong: (TaskItem) -> Unit = { actionTask = it }
+            Column(modifier = Modifier.padding(padding).fillMaxSize()) {
                 when (view) {
-                    ViewMode.LIST -> ListView(tasks, query, { query = it }, sort, searchFocus, ::complete, ::edit, onLong)
-                    ViewMode.KANBAN -> KanbanView(tasks, sort, ::complete, ::edit, onLong)
-                    ViewMode.CALENDAR -> CalendarView(tasks, ::complete, ::edit, onLong)
+                    ViewMode.LIST -> ListView(tasks, query, { query = it }, sort, searchFocus, ::complete, ::edit, onLong, header)
+                    ViewMode.KANBAN -> KanbanView(tasks, sort, ::complete, ::edit, onLong, header)
+                    ViewMode.CALENDAR -> CalendarView(tasks, ::complete, ::edit, onLong, header)
                 }
             }
         }
@@ -238,6 +242,7 @@ class TaskListActivity : ComponentActivity() {
         onComplete: (TaskItem) -> Unit,
         onEdit: (TaskItem) -> Unit,
         onLong: (TaskItem) -> Unit,
+        header: @Composable () -> Unit,
     ) {
         val filtered = tasks.filter {
             query.isBlank() || it.text.contains(query, true) ||
@@ -249,19 +254,22 @@ class TaskListActivity : ComponentActivity() {
         }
         val grouped = groupByDue(sorted)
 
-        Column(modifier = Modifier.fillMaxSize()) {
-            OutlinedTextField(
-                value = query, onValueChange = onQuery,
-                placeholder = { Text("搜索任务 / #标签 / 路径") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).focusRequester(searchFocus)
-            )
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                grouped.forEach { (header, items) ->
-                    item(key = "h_$header") { GroupHeader(header, items.size) }
-                    items(items, key = { it.fileUri + it.rawLine }) { task ->
-                        TaskRow(task, { onComplete(task) }, { onEdit(task) }, { onLong(task) })
-                        HorizontalDivider()
-                    }
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            item(key = "controls") {
+                Column {
+                    header()
+                    OutlinedTextField(
+                        value = query, onValueChange = onQuery,
+                        placeholder = { Text("搜索任务 / #标签 / 路径") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).focusRequester(searchFocus)
+                    )
+                }
+            }
+            grouped.forEach { (header, items) ->
+                item(key = "h_$header") { GroupHeader(header, items.size) }
+                items(items, key = { it.fileUri + it.rawLine }) { task ->
+                    TaskRow(task, { onComplete(task) }, { onEdit(task) }, { onLong(task) })
+                    HorizontalDivider()
                 }
             }
         }
@@ -271,36 +279,41 @@ class TaskListActivity : ComponentActivity() {
 
     @OptIn(ExperimentalFoundationApi::class)
     @Composable
-    private fun KanbanView(tasks: List<TaskItem>, sort: SortMode, onComplete: (TaskItem) -> Unit, onEdit: (TaskItem) -> Unit, onLong: (TaskItem) -> Unit) {
+    private fun KanbanView(tasks: List<TaskItem>, sort: SortMode, onComplete: (TaskItem) -> Unit, onEdit: (TaskItem) -> Unit, onLong: (TaskItem) -> Unit, header: @Composable () -> Unit) {
         val sorted = when (sort) {
             SortMode.DUE -> tasks.sortedWith(compareBy({ it.due ?: LocalDate.MAX }, { it.priorityOrder }))
             SortMode.PRIORITY -> tasks.sortedWith(compareBy({ it.priorityOrder }, { it.due ?: LocalDate.MAX }))
         }
         val columns = groupByDue(sorted)
-        Row(
-            modifier = Modifier.fillMaxSize().horizontalScroll(rememberScrollState()).padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            columns.forEach { (header, items) ->
-                Column(modifier = Modifier.width(260.dp).fillMaxSize()) {
-                    Text(
-                        "$header · ${items.size}",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(8.dp)
-                    )
-                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                        items.forEach { task ->
-                            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                                .combinedClickable(onClick = { onEdit(task) }, onLongClick = { onLong(task) })) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(end = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Checkbox(checked = false, onCheckedChange = { onComplete(task) })
-                                    Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                                        Text(priorityPrefix(task.priorityOrder) + task.text, fontSize = 14.sp)
-                                        TaskDateText(task)
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            item(key = "controls") { header() }
+            item(key = "board") {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    columns.forEach { (header, items) ->
+                        Column(modifier = Modifier.width(260.dp)) {
+                            Text(
+                                "$header · ${items.size}",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                            Column {
+                                items.forEach { task ->
+                                    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                        .combinedClickable(onClick = { onEdit(task) }, onLongClick = { onLong(task) })) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(end = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Checkbox(checked = false, onCheckedChange = { onComplete(task) })
+                                            Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                                                Text(priorityPrefix(task.priorityOrder) + task.text, fontSize = 14.sp)
+                                                TaskDateText(task)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -314,72 +327,77 @@ class TaskListActivity : ComponentActivity() {
     // ---------------- 日历视图 ----------------
 
     @Composable
-    private fun CalendarView(tasks: List<TaskItem>, onComplete: (TaskItem) -> Unit, onEdit: (TaskItem) -> Unit, onLong: (TaskItem) -> Unit) {
+    private fun CalendarView(tasks: List<TaskItem>, onComplete: (TaskItem) -> Unit, onEdit: (TaskItem) -> Unit, onLong: (TaskItem) -> Unit, header: @Composable () -> Unit) {
         var month by remember { mutableStateOf(YearMonth.now()) }
         var selected by remember { mutableStateOf(LocalDate.now()) }
         val today = LocalDate.now()
-        val byDate = tasks.filter { it.actualDue != null }.groupBy { it.actualDue!! }
+        val byDate = remember(tasks) { groupTasksByCalendarDate(tasks) }
+        val dayTasks = (byDate[selected] ?: emptyList()).sortedBy { it.priorityOrder }
 
-        Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-                Text("${month.year}年${month.monthValue}月", style = MaterialTheme.typography.titleMedium)
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    Text("‹", fontSize = 22.sp, modifier = Modifier.clickable { month = month.minusMonths(1) }.padding(horizontal = 10.dp))
-                    Text("今", fontSize = 16.sp, modifier = Modifier.clickable { month = YearMonth.now(); selected = today }.padding(horizontal = 8.dp))
-                    Text("›", fontSize = 22.sp, modifier = Modifier.clickable { month = month.plusMonths(1) }.padding(horizontal = 10.dp))
-                }
-            }
-            // 星期表头
-            Row(modifier = Modifier.fillMaxWidth()) {
-                listOf("一", "二", "三", "四", "五", "六", "日").forEach {
-                    Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(1f))
-                }
-            }
-            // 网格
-            val first = month.atDay(1)
-            val gridStart = first.minusDays((first.dayOfWeek.value - 1).toLong())
-            for (week in 0 until 6) {
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    for (dow in 0 until 7) {
-                        val d = gridStart.plusDays((week * 7 + dow).toLong())
-                        val count = byDate[d]?.size ?: 0
-                        val bg = when {
-                            d == selected -> MaterialTheme.colorScheme.primaryContainer
-                            d == today -> MaterialTheme.colorScheme.secondaryContainer
-                            else -> Color.Transparent
-                        }
-                        Column(
-                            modifier = Modifier.weight(1f).padding(1.dp).clickable { selected = d }
-                                .padding(2.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                d.dayOfMonth.toString(),
-                                fontSize = 13.sp,
-                                fontWeight = if (d == today) FontWeight.Bold else FontWeight.Normal,
-                                color = if (d.month == month.month) MaterialTheme.colorScheme.onSurface
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.background(bg).padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                            Text(if (count > 0) "•" else " ", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            item(key = "controls") { header() }
+            item(key = "calendar") {
+                Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                        Text("${month.year}年${month.monthValue}月", style = MaterialTheme.typography.titleMedium)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            Text("‹", fontSize = 22.sp, modifier = Modifier.clickable { month = month.minusMonths(1) }.padding(horizontal = 10.dp))
+                            Text("今", fontSize = 16.sp, modifier = Modifier.clickable { month = YearMonth.now(); selected = today }.padding(horizontal = 8.dp))
+                            Text("›", fontSize = 22.sp, modifier = Modifier.clickable { month = month.plusMonths(1) }.padding(horizontal = 10.dp))
                         }
                     }
+                    // 星期表头
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        listOf("一", "二", "三", "四", "五", "六", "日").forEach {
+                            Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(1f))
+                        }
+                    }
+                    // 网格
+                    val first = month.atDay(1)
+                    val gridStart = first.minusDays((first.dayOfWeek.value - 1).toLong())
+                    for (week in 0 until 6) {
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            for (dow in 0 until 7) {
+                                val d = gridStart.plusDays((week * 7 + dow).toLong())
+                                val count = byDate[d]?.size ?: 0
+                                val bg = when {
+                                    d == selected -> MaterialTheme.colorScheme.primaryContainer
+                                    d == today -> MaterialTheme.colorScheme.secondaryContainer
+                                    else -> Color.Transparent
+                                }
+                                Column(
+                                    modifier = Modifier.weight(1f).padding(1.dp).clickable { selected = d }
+                                        .padding(2.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        d.dayOfMonth.toString(),
+                                        fontSize = 13.sp,
+                                        fontWeight = if (d == today) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (d.month == month.month) MaterialTheme.colorScheme.onSurface
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.background(bg).padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                    Text(if (count > 0) "•" else " ", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                    Text("${selected.monthValue}月${selected.dayOfMonth}日", style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 8.dp))
                 }
             }
-            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-            Text("${selected.monthValue}月${selected.dayOfMonth}日", style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 8.dp))
-            val dayTasks = (byDate[selected] ?: emptyList()).sortedBy { it.priorityOrder }
             if (dayTasks.isEmpty()) {
-                Text("当天无任务", style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+                item(key = "empty") {
+                    Text("当天无任务", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+                }
             } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(dayTasks, key = { it.fileUri + it.rawLine }) { task ->
-                        TaskRow(task, { onComplete(task) }, { onEdit(task) }, { onLong(task) })
-                        HorizontalDivider()
-                    }
+                items(dayTasks, key = { it.fileUri + it.rawLine }) { task ->
+                    TaskRow(task, { onComplete(task) }, { onEdit(task) }, { onLong(task) })
+                    HorizontalDivider()
                 }
             }
         }
