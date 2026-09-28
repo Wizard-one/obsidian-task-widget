@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.widget.RemoteViews
 import dev.local.taskwidget.QuickAddActivity
 import dev.local.taskwidget.QuickAddNoteActivity
@@ -61,7 +62,7 @@ class TaskWidgetReceiver : AppWidgetProvider() {
                 manager.updateAppWidget(id, buildWidget(context, id, configured, all))
                 manager.notifyAppWidgetViewDataChanged(id, R.id.list)
                 manager.notifyAppWidgetViewDataChanged(id, R.id.task_note_list)
-            } }
+            }.onFailure { Log.e("TaskWidget", "Failed to render widget $id", it) } }
         }
 
         private suspend fun buildWidget(context: Context, id: Int, vaultConfigured: Boolean, all: List<TaskItem>): RemoteViews {
@@ -88,8 +89,8 @@ class TaskWidgetReceiver : AppWidgetProvider() {
             root.setOnClickPendingIntent(R.id.btn_switch, pi(context, base + 2, WidgetActionActivity.toggleIntent(context, id)))
             root.setOnClickPendingIntent(R.id.btn_add, pi(context, base + 3, if (notesMode) QuickAddNoteActivity.taskWidgetIntent(context, id) else Intent(context, QuickAddActivity::class.java)))
             root.setOnClickPendingIntent(R.id.btn_refresh, pi(context, base + 4, WidgetActionActivity.refreshIntent(context, id, notesMode)))
-            root.setRemoteAdapter(R.id.list, Intent(context, TaskWidgetService::class.java).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).setData(Uri.parse("taskwidget://tasks/$id")))
-            root.setRemoteAdapter(R.id.task_note_list, Intent(context, TaskWidgetNoteService::class.java).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).setData(Uri.parse("taskwidget://task-notes/$id")))
+            root.setRemoteAdapter(R.id.list, Intent(context, TaskWidgetService::class.java).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).setData(Uri.parse(WidgetAdapterSession.uri("tasks", id))))
+            root.setRemoteAdapter(R.id.task_note_list, Intent(context, TaskWidgetNoteService::class.java).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).setData(Uri.parse(WidgetAdapterSession.uri("task-notes", id))))
             root.setPendingIntentTemplate(R.id.list, PendingIntent.getActivity(context, base + 8, Intent(context, WidgetActionActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE))
             root.setPendingIntentTemplate(R.id.task_note_list, PendingIntent.getActivity(context, base + 9, Intent(context, dev.local.taskwidget.NoteWidgetActionActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE))
             return root

@@ -4,6 +4,7 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import dev.local.taskwidget.NoteWidgetActionActivity
@@ -43,11 +44,13 @@ private class NoteListFactory(
         } else {
             val result = try {
                 runBlocking { NoteRepository.listNotes(context, config.folderUri) }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.e("NoteWidget", "Failed to load notes for widget $appWidgetId", e)
                 NoteListResult.Unavailable
             }
             (result as? NoteListResult.Success)?.items?.take(WIDGET_LIST_MAX) ?: emptyList()
         }
+        Log.i("NoteWidget", "Loaded ${items.size} note rows for widget $appWidgetId")
     }
 
     override fun onDestroy() {
@@ -57,7 +60,8 @@ private class NoteListFactory(
     override fun getCount(): Int = items.size
 
     override fun getViewAt(position: Int): RemoteViews {
-        val note = items[position]
+        val note = items.getOrNull(position)
+            ?: return RemoteViews(context.packageName, R.layout.widget_note_row)
         return RemoteViews(context.packageName, R.layout.widget_note_row).apply {
             setTextViewText(R.id.note_row_text, noteDisplayName(note.name))
             setOnClickFillInIntent(

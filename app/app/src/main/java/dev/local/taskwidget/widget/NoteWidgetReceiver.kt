@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.widget.RemoteViews
 import dev.local.taskwidget.NoteWidgetActionActivity
 import dev.local.taskwidget.QuickAddNoteActivity
@@ -68,8 +69,9 @@ class NoteWidgetReceiver : AppWidgetProvider() {
                 try {
                     manager.updateAppWidget(id, buildWidget(context, id))
                     manager.notifyAppWidgetViewDataChanged(id, R.id.note_list)
-                } catch (_: Exception) {
+                } catch (e: Exception) {
                     // 单个实例或 SAF 授权失败不影响其它 widget
+                    Log.e("NoteWidget", "Failed to render widget $id", e)
                 }
             }
         }
@@ -99,7 +101,7 @@ class NoteWidgetReceiver : AppWidgetProvider() {
 
             val service = Intent(context, NoteWidgetService::class.java)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                .setData(Uri.parse("taskwidget://notes/list/$appWidgetId"))
+                .setData(Uri.parse(WidgetAdapterSession.uri("notes/list", appWidgetId)))
             root.setRemoteAdapter(R.id.note_list, service)
 
             val template = PendingIntent.getActivity(

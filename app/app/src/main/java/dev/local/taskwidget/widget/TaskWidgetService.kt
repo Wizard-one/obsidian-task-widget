@@ -4,6 +4,7 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
@@ -41,12 +42,16 @@ private class TaskListFactory(
         iconColor = dimIconColor(context)
         val configured = VaultRepository.getVaultUri(context) != null
         val all: List<TaskItem> = if (configured) {
-            try { runBlocking { VaultRepository.loadTasks(context) } } catch (_: Exception) { emptyList() }
+            try { runBlocking { VaultRepository.loadTasks(context) } } catch (e: Exception) {
+                Log.e("TaskWidget", "Failed to load tasks for widget $appWidgetId", e)
+                emptyList()
+            }
         } else emptyList()
         val filter = WidgetFilterStore.load(context, appWidgetId)
         items = filter.apply(all)
             .distinctBy { it.fileUri + " " + it.rawLine }
             .take(WIDGET_LIST_MAX)
+        Log.i("TaskWidget", "Loaded ${items.size} task rows for widget $appWidgetId")
     }
 
     override fun onDestroy() { items = emptyList() }
@@ -54,8 +59,9 @@ private class TaskListFactory(
     override fun getCount(): Int = items.size
 
     override fun getViewAt(position: Int): RemoteViews {
-        val task = items[position]
         val row = RemoteViews(context.packageName, R.layout.widget_task_row)
+        // The host may still request an old position after the data set shrinks.
+        val task = items.getOrNull(position) ?: return row
         setIcon(row, R.id.row_check, context, R.drawable.ic_check_box_outline, 24, iconColor)
         row.setTextViewText(R.id.row_text, priorityPrefix(task.priorityOrder) + task.text)
         val due = task.actualDue
