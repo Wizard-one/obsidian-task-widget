@@ -3,13 +3,16 @@ package dev.local.taskwidget.data
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import android.util.AtomicFile
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -49,11 +52,31 @@ data class TaskItem(
         listOfNotNull(start, actualDue).any { !it.isAfter(date) }
 }
 
+/** 扫描期间修改过的文档，以最新增量缓存覆盖扫描开始时拍下的旧快照。 */
+internal fun mergeNewerCacheEntries(
+    scannedFiles: JSONObject,
+    scannedMtimes: JSONObject,
+    latestFiles: JSONObject,
+    latestMtimes: JSONObject,
+    changedKeys: Set<String>,
+) {
+    for (key in changedKeys) {
+        latestFiles.optJSONObject(key)?.let { scannedFiles.put(key, it) } ?: scannedFiles.remove(key)
+        if (latestMtimes.has(key)) scannedMtimes.put(key, latestMtimes.get(key))
+        else scannedMtimes.remove(key)
+    }
+}
+
 /**
  * 扫描 Obsidian vault(SAF 授权的文件夹)中的所有 .md 文件,
  * 解析待办任务,缓存到 filesDir,并支持把完成/编辑写回源文件。
  */
 object VaultRepository {
+    // SAF 写回、增量更新和扫描提交共用这把锁；长时间的 Vault 遍历不占用它。
+    private val cacheMutex = Mutex()
+    private val scanMutex = Mutex()
+    private var cacheRevision = 0L
+    private val changedKeys = mutableMapOf<String, Long>()
 
     private const val PREFS = "settings"
     private const val KEY_VAULT_URI = "vault_uri"
@@ -112,7 +135,7 @@ object VaultRepository {
     /** 任务表:{ uri: { name, path, lastModified, tasks: [...] } } */
     private fun loadFiles(context: Context): JSONObject =
         try {
-            JSONObject(filesFile(context).readText())
+            JSONObject(AtomicFile(filesFile(context)).openRead().bufferedReader().use { it.readText() })
         } catch (_: Exception) {
             JSONObject()
         }
@@ -120,14 +143,14 @@ object VaultRepository {
     /** mtimes:{ uri: lastModified },仅扫描用 */
     private fun loadMtimes(context: Context): JSONObject =
         try {
-            JSONObject(mtimesFile(context).readText())
+            JSONObject(AtomicFile(mtimesFile(context)).openRead().bufferedReader().use { it.readText() })
         } catch (_: Exception) {
             JSONObject()
         }
 
     private fun deleteCache(context: Context) {
-        filesFile(context).delete()
-        mtimesFile(context).delete()
+        AtomicFile(filesFile(context)).delete()
+        AtomicFile(mtimesFile(context)).delete()
     }
 
     private fun tasksToJson(tasks: List<ParsedTask>): JSONArray {
@@ -238,7 +261,7 @@ object VaultRepository {
         val lastModified: Long,
     )
 
-    suspend fun scan(context: Context): Int? = withContext(Dispatchers.IO) {
+    suspend fun scan(context: Context): Int? = withContext(Dispatchers.IO) { scanMutex.withLock {
         val treeUri = getVaultUri(context) ?: return@withContext null
         val rootDocId = try {
             DocumentsContract.getTreeDocumentId(treeUri)
@@ -246,9 +269,10 @@ object VaultRepository {
             return@withContext null
         }
         val resolver = context.contentResolver
-        val oldFiles = loadFiles(context)
+        val (oldFiles, oldMtimes, startRevision) = cacheMutex.withLock {
+            Triple(loadFiles(context), loadMtimes(context), cacheRevision)
+        }
         // mtimes 记录 vault 里所有 .md 文件的修改时间(含无任务的),用于跳过未改动文件的读取
-        val oldMtimes = loadMtimes(context)
 
         val projection = arrayOf(
             DocumentsContract.Document.COLUMN_DOCUMENT_ID,
@@ -293,7 +317,6 @@ object VaultRepository {
         val newFiles = JSONObject()
         val newMtimes = JSONObject()
         val toRead = ArrayList<FileRec>()
-        var count = 0
         for (r in allFiles) {
             newMtimes.put(r.uriStr, r.lastModified)
             val unchanged = r.lastModified > 0 && oldMtimes.optLong(r.uriStr, -1L) == r.lastModified
@@ -301,7 +324,6 @@ object VaultRepository {
                 oldFiles.optJSONObject(r.uriStr)?.let { entry ->
                     entry.put("path", r.path)
                     newFiles.put(r.uriStr, entry)
-                    count += entry.optJSONArray("tasks")?.length() ?: 0
                 }
             } else {
                 toRead += r
@@ -323,27 +345,52 @@ object VaultRepository {
         for ((r, tasks) in parsed) {
             if (tasks.isNotEmpty()) {
                 newFiles.put(r.uriStr, fileEntry(r.name, r.path, r.lastModified, tasks))
-                count += tasks.size
             }
         }
 
-        writeCache(context, newFiles, newMtimes)
+        val committed = cacheMutex.withLock {
+            if (getVaultUri(context) != treeUri) return@withLock false
+            val changed = changedKeys.filterValues { it > startRevision }.keys
+            if (changed.isNotEmpty()) {
+                mergeNewerCacheEntries(newFiles, newMtimes, loadFiles(context), loadMtimes(context), changed)
+            }
+            writeCache(context, newFiles, newMtimes)
+            changedKeys.entries.removeAll { it.value <= startRevision }
+            true
+        }
+        if (!committed) return@withContext null
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putLong(KEY_LAST_SCAN, System.currentTimeMillis()).apply()
-        count
-    }
+        newFiles.keys().asSequence().sumOf { newFiles.optJSONObject(it)?.optJSONArray("tasks")?.length() ?: 0 }
+    } }
 
     private fun writeCache(context: Context, files: JSONObject, mtimes: JSONObject) {
-        filesFile(context).writeText(files.toString())
-        mtimesFile(context).writeText(mtimes.toString())
+        writeAtomic(filesFile(context), files.toString())
+        writeAtomic(mtimesFile(context), mtimes.toString())
+    }
+
+    private fun writeAtomic(file: File, content: String) {
+        val atomic = AtomicFile(file)
+        val stream = atomic.startWrite()
+        try {
+            stream.write(content.toByteArray(Charsets.UTF_8))
+            atomic.finishWrite(stream)
+        } catch (e: Exception) {
+            atomic.failWrite(stream)
+            throw e
+        }
+    }
+
+    private fun markChanged(key: String) {
+        changedKeys[key] = ++cacheRevision
     }
 
     /**
      * 增量:只重解析单个文件并更新缓存(用于快速添加后,避免整库慢扫描)。
      */
-    suspend fun noteFileChanged(context: Context, uri: Uri): Unit = withContext(Dispatchers.IO) {
+    suspend fun noteFileChanged(context: Context, uri: Uri): Unit = withContext(Dispatchers.IO) { cacheMutex.withLock {
         try {
-            val content = readDocument(context, uri) ?: return@withContext
+            val content = readDocument(context, uri) ?: return@withLock
             val files = loadFiles(context)
             val mtimes = loadMtimes(context)
             // 用扫描相同的树 URI 作键,避免快速添加(单文档 URI)与扫描(树 URI)存两份
@@ -357,10 +404,11 @@ object VaultRepository {
             if (entry.getJSONArray("tasks").length() > 0) files.put(key, entry) else files.remove(key)
             mtimes.put(key, lastModified)
             writeCache(context, files, mtimes)
+            markChanged(key)
         } catch (_: Exception) {
             // 忽略;下次整库扫描会补上
         }
-    }
+    } }
 
     /**
      * 把任意文档 URI 归一化为"树内文档 URI"(与 scan 用的键一致)。
@@ -428,43 +476,49 @@ object VaultRepository {
         fileUriStr: String,
         oldRawLine: String,
         transform: (String) -> String?,
-    ): Boolean = withContext(Dispatchers.IO) {
+    ): Boolean = withContext(Dispatchers.IO) { cacheMutex.withLock {
         try {
             val uri = Uri.parse(fileUriStr)
-            val content = readDocument(context, uri) ?: return@withContext false
+            val content = readDocument(context, uri) ?: return@withLock false
             // 找不到原行(文件已被外部改动)→ transform 返回 null,交调用方处理,即为冲突防护
-            val updated = transform(content) ?: return@withContext false
+            val updated = transform(content) ?: return@withLock false
 
             // "wt" 确保截断旧内容
             context.contentResolver.openOutputStream(uri, "wt")?.use { out ->
                 out.write(updated.toByteArray(Charsets.UTF_8))
-            } ?: return@withContext false
+            } ?: return@withLock false
 
             // 增量更新缓存:只重解析这一个文件(不触发整库扫描)
             val files = loadFiles(context)
             val mtimes = loadMtimes(context)
-            val old = files.optJSONObject(fileUriStr)
+            val key = treeDocumentKey(context, uri)
+            val old = files.optJSONObject(key) ?: files.optJSONObject(fileUriStr)
             val doc = DocumentFile.fromSingleUri(context, uri)
             val lastModified = doc?.lastModified() ?: 0L
             val name = old?.optString("name")?.ifEmpty { null } ?: doc?.name ?: ""
             val path = old?.optString("path")?.ifEmpty { null } ?: name
             val entry = fileEntry(name, path, lastModified, TaskParser.parseFile(updated))
             if (entry.getJSONArray("tasks").length() > 0) {
-                files.put(fileUriStr, entry)
+                files.put(key, entry)
             } else {
-                files.remove(fileUriStr)
+                files.remove(key)
             }
-            mtimes.put(fileUriStr, lastModified)
+            mtimes.put(key, lastModified)
+            if (key != fileUriStr) {
+                files.remove(fileUriStr)
+                mtimes.remove(fileUriStr)
+            }
             // 兜底:把这条旧行从所有同路径的缓存条目里清除。
             // 同一文件可能被扫描(树 URI 键)和快速添加(单文档 URI 键)存了两份,
             // 只更新一份会让另一份的旧行被 loadTasks 去重时捞回来,表现为"已完成但 widget 还在"。
-            purgeLineFromAllEntries(files, path, oldRawLine, keepKey = fileUriStr)
+            purgeLineFromAllEntries(files, path, oldRawLine, keepKey = key)
             writeCache(context, files, mtimes)
+            markChanged(key)
             true
         } catch (_: Exception) {
             false
         }
-    }
+    } }
 
     /** 从 [files] 里所有 path==[path] 的条目中移除 rawLine==[rawLine] 的任务([keepKey] 除外,它已重解析) */
     private fun purgeLineFromAllEntries(files: JSONObject, path: String, rawLine: String, keepKey: String) {

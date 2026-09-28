@@ -24,6 +24,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** 任务与笔记双页 widget，继续使用 HyperOS 可靠的传统 RemoteViews 集合。 */
 class TaskWidgetReceiver : AppWidgetProvider() {
@@ -40,14 +42,17 @@ class TaskWidgetReceiver : AppWidgetProvider() {
 
     companion object {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        private val renderMutex = Mutex()
         suspend fun renderAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
             renderIds(context, manager, manager.getAppWidgetIds(ComponentName(context, TaskWidgetReceiver::class.java)))
         }
         suspend fun render(context: Context, ids: IntArray) = renderIds(context, AppWidgetManager.getInstance(context), ids)
         suspend fun toggleContent(context: Context, id: Int) {
-            TaskWidgetDisplayStore.toggle(context, id)
-            render(context, intArrayOf(id))
+            renderMutex.withLock {
+                TaskWidgetDisplayStore.toggle(context, id)
+                renderId(context, AppWidgetManager.getInstance(context), id)
+            }
         }
         suspend fun renderNotesFolder(context: Context, folderUri: String) {
             val manager = AppWidgetManager.getInstance(context)
@@ -56,24 +61,30 @@ class TaskWidgetReceiver : AppWidgetProvider() {
         }
 
         private suspend fun renderIds(context: Context, manager: AppWidgetManager, ids: IntArray) {
+            renderMutex.withLock {
+                ids.forEach { renderId(context, manager, it) }
+            }
+        }
+
+        private suspend fun renderId(context: Context, manager: AppWidgetManager, id: Int) {
             val configured = VaultRepository.getVaultUri(context) != null
             val all = if (configured) runCatching { VaultRepository.loadTasks(context) }.getOrDefault(emptyList()) else emptyList()
-            ids.forEach { id -> runCatching {
+            runCatching {
                 manager.updateAppWidget(id, buildWidget(context, id, configured, all))
                 manager.notifyAppWidgetViewDataChanged(id, R.id.list)
                 manager.notifyAppWidgetViewDataChanged(id, R.id.task_note_list)
-            }.onFailure { Log.e("TaskWidget", "Failed to render widget $id", it) } }
+            }.onFailure { Log.e("TaskWidget", "Failed to render widget $id", it) }
         }
 
         private suspend fun buildWidget(context: Context, id: Int, vaultConfigured: Boolean, all: List<TaskItem>): RemoteViews {
             val filter = WidgetFilterStore.load(context, id)
             val noteConfig = TaskWidgetNoteConfigStore.load(context, id)
             val mode = TaskWidgetDisplayStore.load(context, id)
+            val notesMode = mode == TaskWidgetContent.NOTES
             val taskCount = if (vaultConfigured) filter.apply(all).distinctBy { it.fileUri + it.rawLine }.size else 0
-            val notes = noteConfig?.let { NoteRepository.listNotes(context, it.folderUri) }
+            val notes = if (notesMode) noteConfig?.let { NoteRepository.listNotes(context, it.folderUri) } else null
             val noteCount = (notes as? NoteListResult.Success)?.items?.size ?: 0
             val root = RemoteViews(context.packageName, R.layout.widget_task_root)
-            val notesMode = mode == TaskWidgetContent.NOTES
             root.setDisplayedChild(R.id.task_content_flipper, if (notesMode) 1 else 0)
             root.setTextViewText(R.id.widget_title, if (notesMode) noteConfig?.folderName ?: "笔记" else filter.title)
             root.setTextViewText(R.id.widget_count, (if (notesMode) noteCount else taskCount).toString())
